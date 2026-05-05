@@ -19,6 +19,7 @@ WaveManager.waves = {
         groups = {
             { type = "grunt", count = 10, interval = 0.65 },
             { type = "scout", count = 6, interval = 0.75 },
+            { type = "engineer", count = 2, interval = 1.5 },
         },
     },
     {
@@ -27,6 +28,7 @@ WaveManager.waves = {
             { type = "grunt", count = 8, interval = 0.55 },
             { type = "tank", count = 3, interval = 2.2 },
             { type = "scout", count = 5, interval = 0.75 },
+            { type = "engineer", count = 3, interval = 1.3 },
         },
     },
     {
@@ -35,6 +37,18 @@ WaveManager.waves = {
             { type = "grunt", count = 12, interval = 0.45 },
             { type = "scout", count = 8, interval = 0.65 },
             { type = "tank", count = 5, interval = 1.9 },
+            { type = "engineer", count = 4, interval = 1.2 },
+            { type = "demolition", count = 2, interval = 2.5 },
+        },
+    },
+    {
+        prepTime = 16.0,
+        groups = {
+            { type = "grunt", count = 15, interval = 0.35 },
+            { type = "scout", count = 10, interval = 0.5 },
+            { type = "tank", count = 6, interval = 1.8 },
+            { type = "engineer", count = 5, interval = 1.0 },
+            { type = "demolition", count = 3, interval = 2.0 },
         },
     },
 }

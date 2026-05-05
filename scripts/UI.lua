@@ -165,9 +165,17 @@ function GameUI.Update(snapshot)
     setText("livesLabel", "生命: " .. snapshot.lives)
     setText("waveLabel", string.format("波次: %d/%d", snapshot.wave, snapshot.maxWave))
     setText("statusLabel", "状态: " .. snapshot.statusText)
-    setText("selectedTowerLabel", "当前选择: " .. snapshot.selectedTowerName)
-    setText("selectedTowerHintLabel", "费用: " .. snapshot.selectedTowerCost .. " 金币")
+    
+    if snapshot.buildMode == "structure" then
+        setText("selectedTowerLabel", "当前工事: " .. snapshot.selectedStructureName)
+        setText("selectedTowerHintLabel", "费用: " .. snapshot.selectedStructureCost .. " 金币")
+    else
+        setText("selectedTowerLabel", "当前选择: " .. snapshot.selectedTowerName)
+        setText("selectedTowerHintLabel", "费用: " .. snapshot.selectedTowerCost .. " 金币")
+    end
+    
     setText("upgradeLabel", snapshot.upgradeText)
+    setText("footerLabel", "建造模式: " .. (snapshot.buildMode == "structure" and "工事(Tab切换)" or "塔") .. " | 左键放置 | 1-3塔 | 4-6工事 | U升级 | P暂停 | R重开")
 
     setVisible("menuOverlay", snapshot.state == "menu")
     setVisible("resultOverlay", snapshot.state == "victory" or snapshot.state == "game_over")

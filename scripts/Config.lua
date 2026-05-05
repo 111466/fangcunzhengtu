@@ -36,7 +36,28 @@ Config.StructureTypes = {
         color = { 160, 120, 80, 255 },
         outline = { 200, 170, 130, 255 },
         blocksPath = true,
-    }
+    },
+    wall = {
+        name = "石墙",
+        cost = 60,
+        health = 250,
+        maxHealth = 250,
+        size = 40,
+        color = { 100, 100, 110, 255 },
+        outline = { 160, 160, 170, 255 },
+        blocksPath = true,
+    },
+    spikeTrap = {
+        name = "尖刺陷阱",
+        cost = 40,
+        health = 80,
+        maxHealth = 80,
+        size = 40,
+        color = { 120, 60, 60, 255 },
+        outline = { 180, 100, 100, 255 },
+        blocksPath = false,
+        damage = 20,
+    },
 }
 
 Config.Colors = {

@@ -161,7 +161,7 @@ local function findTowerAt(x, y)
 end
 
 local function spawnEnemy(typeName)
-    local enemy = Enemy.Spawn(typeName, game_.path)
+    local enemy = Enemy.Spawn(typeName, game_.path, game_.gridMap, game_.currentRoute)
     if enemy then
         game_.enemies[#game_.enemies + 1] = enemy
     end
@@ -313,7 +313,8 @@ local function tryPlaceStructure(gridX, gridY)
 end
 
 local function updateGameUI()
-    local selectedDefinition = Tower.types[game_.selectedTowerType]
+    local selectedTowerDefinition = Tower.types[game_.selectedTowerType]
+    local selectedStructureDefinition = Config.StructureTypes[game_.selectedStructureType]
     local selectedTower = game_.selectedTower
     local upgradeText = "选中塔后按 U 升级"
 
@@ -332,8 +333,11 @@ local function updateGameUI()
         wave = game_.waveManager.currentWave,
         maxWave = WaveManager.GetWaveCount(),
         statusText = game_.state == "paused" and "已暂停" or WaveManager.GetStatusText(game_.waveManager),
-        selectedTowerName = selectedDefinition.name,
-        selectedTowerCost = selectedDefinition.cost,
+        selectedTowerName = selectedTowerDefinition.name,
+        selectedTowerCost = selectedTowerDefinition.cost,
+        selectedStructureName = selectedStructureDefinition.name,
+        selectedStructureCost = selectedStructureDefinition.cost,
+        buildMode = game_.buildMode,
         upgradeText = upgradeText,
     })
 end
@@ -344,7 +348,31 @@ local function updatePlaying(dt)
     end
 
     for _, enemy in ipairs(game_.enemies) do
-        Enemy.Update(enemy, dt, game_.path)
+        Enemy.Update(enemy, dt, game_.path, game_.gridMap, game_.currentRoute, game_.structures, Structure)
+    end
+
+    local structuresDestroyed = 0
+    for i = #game_.structures, 1, -1 do
+        local structure = game_.structures[i]
+        if structure and structure.health &lt;= 0 then
+            local tile = GridMap.GetTile(game_.gridMap, structure.gridX, structure.gridY)
+            if tile then
+                tile.blocked = false
+                tile.occupantType = nil
+                tile.structureId = nil
+            end
+            table.remove(game_.structures, i)
+            structuresDestroyed = structuresDestroyed + 1
+        end
+    end
+
+    if structuresDestroyed &gt; 0 then
+        recalculateRoute()
+        if structuresDestroyed == 1 then
+            showMessage("路障被摧毁！", 1.2)
+        else
+            showMessage(string.format("%d 个路障被摧毁！", structuresDestroyed), 1.2)
+        end
     end
 
     for _, tower in ipairs(game_.towers) do
@@ -655,10 +683,31 @@ function HandleKeyDown(eventType, eventData)
 
     if key == KEY_1 then
         game_.selectedTowerType = Config.TowerOrder[1]
+        game_.buildMode = "tower"
+        showMessage("切换到：弓箭塔", 0.8)
     elseif key == KEY_2 then
         game_.selectedTowerType = Config.TowerOrder[2]
+        game_.buildMode = "tower"
+        showMessage("切换到：战士塔", 0.8)
     elseif key == KEY_3 then
         game_.selectedTowerType = Config.TowerOrder[3]
+        game_.buildMode = "tower"
+        showMessage("切换到：僧侣塔", 0.8)
+    elseif key == KEY_4 then
+        game_.selectedStructureType = "barricade"
+        game_.buildMode = "structure"
+        showMessage("切换到：路障", 0.8)
+    elseif key == KEY_5 then
+        game_.selectedStructureType = "wall"
+        game_.buildMode = "structure"
+        showMessage("切换到：石墙", 0.8)
+    elseif key == KEY_6 then
+        game_.selectedStructureType = "spikeTrap"
+        game_.buildMode = "structure"
+        showMessage("切换到：尖刺陷阱", 0.8)
+    elseif key == KEY_TAB then
+        game_.buildMode = game_.buildMode == "tower" and "structure" or "tower"
+        showMessage(game_.buildMode == "tower" and "建造模式：塔" or "建造模式：工事", 0.8)
     end
 end
 
