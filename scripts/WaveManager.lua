@@ -1,146 +1,141 @@
+
 local WaveManager = {}
 
 WaveManager.waves = {
     {
-        prepTime = 5.0,
+        prepTime = 10,
         groups = {
-            { type = "grunt", count = 6, interval = 0.9 },
+            { type = "grunt", count = 6, interval = 1.2, route = "random" },
         },
     },
     {
-        prepTime = 8.0,
+        prepTime = 15,
         groups = {
-            { type = "grunt", count = 8, interval = 0.8 },
-            { type = "scout", count = 4, interval = 1.0 },
+            { type = "grunt", count = 8, interval = 1.0, route = "random" },
+            { type = "runner", count = 4, interval = 1.5, route = "A" },
         },
     },
     {
-        prepTime = 10.0,
+        prepTime = 15,
         groups = {
-            { type = "grunt", count = 10, interval = 0.65 },
-            { type = "scout", count = 6, interval = 0.75 },
+            { type = "grunt", count = 5, interval = 1.0, route = "A" },
+            { type = "runner", count = 5, interval = 1.0, route = "B" },
+            { type = "grunt", count = 5, interval = 1.0, route = "B" },
         },
     },
     {
-        prepTime = 12.0,
+        prepTime = 20,
         groups = {
-            { type = "grunt", count = 8, interval = 0.55 },
-            { type = "tank", count = 3, interval = 2.2 },
-            { type = "scout", count = 5, interval = 0.75 },
+            { type = "grunt", count = 10, interval = 0.7, route = "random" },
+            { type = "brute", count = 2, interval = 4.0, route = "A" },
+            { type = "archer", count = 3, interval = 2.0, route = "B" },
         },
     },
     {
-        prepTime = 14.0,
+        prepTime = 20,
         groups = {
-            { type = "grunt", count = 12, interval = 0.45 },
-            { type = "scout", count = 8, interval = 0.65 },
-            { type = "tank", count = 5, interval = 1.9 },
+            { type = "runner", count = 8, interval = 0.6, route = "random" },
+            { type = "brute", count = 3, interval = 3.0, route = "A" },
+            { type = "archer", count = 5, interval = 1.5, route = "B" },
+        },
+    },
+    {
+        prepTime = 20,
+        groups = {
+            { type = "archer", count = 10, interval = 1.0, route = "random" },
+            { type = "grunt", count = 5, interval = 1.5, route = "A" },
+        },
+    },
+    {
+        prepTime = 25,
+        groups = {
+            { type = "grunt", count = 15, interval = 0.5, route = "random" },
+            { type = "brute", count = 4, interval = 2.5, route = "random" },
+            { type = "runner", count = 6, interval = 0.8, route = "B" },
+        },
+    },
+    {
+        prepTime = 30,
+        groups = {
+            { type = "boss", count = 1, interval = 0, route = "A" },
+            { type = "grunt", count = 10, interval = 0.6, route = "B" },
+            { type = "brute", count = 3, interval = 3.0, route = "A" },
         },
     },
 }
 
-local function buildQueue(groups)
-    local queue = {}
-    local remaining = {}
+WaveManager.currentWave = 0
+WaveManager.spawnQueue = {}
+WaveManager.spawnTimer = 0
+WaveManager.waveActive = false
+WaveManager.prepTimer = 0
+WaveManager.allComplete = false
 
-    for index, group in ipairs(groups) do
-        remaining[index] = group.count
-    end
+function WaveManager.Update(dt, gold)
+    if WaveManager.allComplete then return gold end
 
-    local added = true
-    while added do
-        added = false
-        for index, group in ipairs(groups) do
-            if remaining[index] > 0 then
-            queue[#queue + 1] = {
-                type = group.type,
-                    delay = group.interval,
-                }
-                remaining[index] = remaining[index] - 1
-                added = true
-            end
+    if not WaveManager.waveActive then
+        WaveManager.prepTimer = WaveManager.prepTimer - dt
+        if WaveManager.prepTimer <= 0 then
+            WaveManager.StartNextWave()
         end
+        return gold
     end
 
-    return queue
-end
-
-function WaveManager.Create()
-    local manager = {
-        currentWave = 0,
-        prepTimer = WaveManager.waves[1].prepTime,
-        spawnQueue = {},
-        spawnTimer = 0,
-        waveActive = false,
-        allComplete = false,
-    }
-    return manager
-end
-
-function WaveManager.Update(manager, dt, spawnEnemy, countAliveEnemies)
-    if manager.allComplete then
-        return
-    end
-
-    if not manager.waveActive then
-        manager.prepTimer = manager.prepTimer - dt
-        if manager.prepTimer <= 0 then
-            manager.currentWave = manager.currentWave + 1
-            local waveDefinition = WaveManager.waves[manager.currentWave]
-            if not waveDefinition then
-                manager.allComplete = true
-                return
-            end
-
-            manager.spawnQueue = buildQueue(waveDefinition.groups)
-            manager.spawnTimer = 0
-            manager.waveActive = true
-        end
-        return
-    end
-
-    manager.spawnTimer = manager.spawnTimer - dt
-    while manager.spawnTimer <= 0 and #manager.spawnQueue > 0 do
-        local nextSpawn = table.remove(manager.spawnQueue, 1)
-        spawnEnemy(nextSpawn.type)
-        if #manager.spawnQueue > 0 then
-            manager.spawnTimer = manager.spawnTimer + nextSpawn.delay
+    WaveManager.spawnTimer = WaveManager.spawnTimer - dt
+    if WaveManager.spawnTimer <= 0 and #WaveManager.spawnQueue > 0 then
+        local next = table.remove(WaveManager.spawnQueue, 1)
+        local route
+        if next.route == "random" then
+            route = Path.RandomRoute()
+        elseif next.route == "A" then
+            route = Path.routes[1]
         else
-            manager.spawnTimer = 0
-            break
+            route = Path.routes[2]
         end
+        Enemy.Create(next.type, route)
+        WaveManager.spawnTimer = next.interval
     end
 
-    local activeEnemyCount = countAliveEnemies()
-    if #manager.spawnQueue == 0 and activeEnemyCount == 0 then
-        manager.waveActive = false
-        local nextWave = WaveManager.waves[manager.currentWave + 1]
+    if #WaveManager.spawnQueue == 0 and #Enemy.list == 0 then
+        WaveManager.waveActive = false
+        local nextWave = WaveManager.waves[WaveManager.currentWave + 1]
         if nextWave then
-            manager.prepTimer = nextWave.prepTime
+            WaveManager.prepTimer = nextWave.prepTime
         else
-            manager.allComplete = true
+            WaveManager.allComplete = true
         end
     end
+
+    return gold
 end
 
-function WaveManager.GetWaveCount()
-    return #WaveManager.waves
-end
+function WaveManager.StartNextWave()
+    WaveManager.currentWave = WaveManager.currentWave + 1
+    local wave = WaveManager.waves[WaveManager.currentWave]
+    if not wave then WaveManager.allComplete = true; return end
 
-function WaveManager.IsFinished(manager)
-    return manager.allComplete and not manager.waveActive and #manager.spawnQueue == 0
-end
-
-function WaveManager.GetStatusText(manager)
-    if manager.allComplete then
-        return "所有波次已完成"
+    WaveManager.spawnQueue = {}
+    for _, group in ipairs(wave.groups) do
+        for j = 1, group.count do
+            table.insert(WaveManager.spawnQueue, {
+                type = group.type,
+                interval = group.interval,
+                route = group.route,
+            })
+        end
     end
+    WaveManager.spawnTimer = 0
+    WaveManager.waveActive = true
+end
 
-    if manager.waveActive then
-        return "战斗进行中"
-    end
-
-    return string.format("下一波 %.1fs", math.max(0, manager.prepTimer))
+function WaveManager.Init()
+    WaveManager.currentWave = 0
+    WaveManager.spawnQueue = {}
+    WaveManager.spawnTimer = 0
+    WaveManager.waveActive = false
+    WaveManager.prepTimer = WaveManager.waves[1].prepTime
+    WaveManager.allComplete = false
 end
 
 return WaveManager

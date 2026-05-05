@@ -1,98 +1,88 @@
-local Utils = require("scripts/Utils")
 
 local Path = {}
 
-local function makePoint(x, y)
-    return { x = x, y = y }
-end
+Path.routes = {
+    {
+        { x = -50,  y = 200 },
+        { x = 150,  y = 200 },
+        { x = 150,  y = 400 },
+        { x = 400,  y = 400 },
+        { x = 400,  y = 250 },
+        { x = 700,  y = 250 },
+        { x = 700,  y = 500 },
+        { x = 1000, y = 500 },
+        { x = 1000, y = 350 },
+        { x = 1300, y = 350 },
+        { x = 1450, y = 350 },
+    },
+    {
+        { x = 1450, y = 600 },
+        { x = 1200, y = 600 },
+        { x = 1200, y = 450 },
+        { x = 900,  y = 450 },
+        { x = 900,  y = 650 },
+        { x = 600,  y = 650 },
+        { x = 600,  y = 500 },
+        { x = 300,  y = 500 },
+        { x = 300,  y = 650 },
+        { x = -50,  y = 650 },
+    },
+}
 
-function Path.Create(config)
-    local path = {
-        width = config.PathWidth,
-        waypoints = {
-            makePoint(-60, 140),
-            makePoint(220, 140),
-            makePoint(220, 520),
-            makePoint(520, 520),
-            makePoint(520, 240),
-            makePoint(820, 240),
-            makePoint(820, 620),
-            makePoint(1140, 620),
-            makePoint(1140, 360),
-            makePoint(1340, 360),
-        },
-        segments = {},
-        totalLength = 0,
-    }
-
-    for index = 2, #path.waypoints do
-        local from = path.waypoints[index - 1]
-        local to = path.waypoints[index]
-        local length = Utils.Distance(from.x, from.y, to.x, to.y)
-
-        path.segments[#path.segments + 1] = {
-            from = from,
-            to = to,
-            length = length,
-        }
-        path.totalLength = path.totalLength + length
+function Path.GetRouteLength(route)
+    local total = 0
+    for i = 2, #route do
+        local dx = route[i].x - route[i-1].x
+        local dy = route[i].y - route[i-1].y
+        total = total + math.sqrt(dx*dx + dy*dy)
     end
-
-    return path
+    return total
 end
 
-function Path.GetTotalLength(path)
-    return path.totalLength
-end
-
-function Path.GetPosition(path, progress)
-    if progress <= 0 then
-        local startPoint = path.waypoints[1]
-        return startPoint.x, startPoint.y
-    end
-
+function Path.GetPosition(route, progress)
+    if progress <= 0 then return route[1].x, route[1].y end
     if progress >= 1 then
-        local endPoint = path.waypoints[#path.waypoints]
-        return endPoint.x, endPoint.y
+        local last = route[#route]
+        return last.x, last.y
     end
-
-    local remainingDistance = path.totalLength * progress
-    for _, segment in ipairs(path.segments) do
-        if remainingDistance <= segment.length then
-            local t = remainingDistance / segment.length
-            return segment.from.x + (segment.to.x - segment.from.x) * t,
-                segment.from.y + (segment.to.y - segment.from.y) * t
+    local totalLen = Path.GetRouteLength(route)
+    local targetDist = progress * totalLen
+    local accumulated = 0
+    for i = 2, #route do
+        local dx = route[i].x - route[i-1].x
+        local dy = route[i].y - route[i-1].y
+        local segLen = math.sqrt(dx*dx + dy*dy)
+        if accumulated + segLen >= targetDist then
+            local t = (targetDist - accumulated) / segLen
+            return route[i-1].x + dx * t, route[i-1].y + dy * t
         end
-        remainingDistance = remainingDistance - segment.length
+        accumulated = accumulated + segLen
     end
-
-    local fallback = path.waypoints[#path.waypoints]
-    return fallback.x, fallback.y
+    return route[#route].x, route[#route].y
 end
 
-function Path.Draw(nvg, path, transform, colors)
-    local halfWidth = Utils.ToScreenSize(transform, path.width * 0.5)
+function Path.RandomRoute()
+    return Path.routes[math.random(#Path.routes)]
+end
 
-    for _, segment in ipairs(path.segments) do
-        local x1, y1 = Utils.ToScreen(transform, segment.from.x, segment.from.y)
-        local x2, y2 = Utils.ToScreen(transform, segment.to.x, segment.to.y)
-
+function Path.Draw(nvg)
+    for _, route in ipairs(Path.routes) do
+        nvgStrokeColor(nvg, nvgRGBA(100, 80, 60, 200))
         nvgBeginPath(nvg)
-        nvgMoveTo(nvg, x1, y1)
-        nvgLineTo(nvg, x2, y2)
-        nvgStrokeColor(nvg, nvgRGBA(colors.pathFill[1], colors.pathFill[2], colors.pathFill[3], colors.pathFill[4]))
-        nvgStrokeWidth(nvg, halfWidth * 2.0)
-        nvgLineCap(nvg, NVG_ROUND)
-        nvgLineJoin(nvg, NVG_ROUND)
+        nvgMoveTo(nvg, route[1].x, route[1].y)
+        for i = 2, #route do
+            nvgLineTo(nvg, route[i].x, route[i].y)
+        end
+        nvgStrokeWidth(nvg, 40)
         nvgStroke(nvg)
-
+        
+        nvgStrokeColor(nvg, nvgRGBA(80, 60, 40, 255))
         nvgBeginPath(nvg)
-        nvgMoveTo(nvg, x1, y1)
-        nvgLineTo(nvg, x2, y2)
-        nvgStrokeColor(nvg, nvgRGBA(colors.pathOutline[1], colors.pathOutline[2], colors.pathOutline[3], colors.pathOutline[4]))
-        nvgStrokeWidth(nvg, math.max(2, halfWidth * 0.25))
-        nvgLineCap(nvg, NVG_ROUND)
-        nvgLineJoin(nvg, NVG_ROUND)
+        nvgMoveTo(nvg, route[1].x, route[1].y)
+        for i = 2, #route do
+            nvgLineTo(nvg, route[i].x, route[i].y)
+        end
+        nvgStrokeWidth(nvg, 44)
         nvgStroke(nvg)
     end
 end

@@ -1,212 +1,173 @@
-local Utils = require("scripts/Utils")
 
 local Tower = {}
+Tower.list = {}
 
 Tower.types = {
-    archer = {
-        name = "弓箭塔",
-        cost = 50,
-        damage = 22,
-        range = 155,
-        fireRate = 1.1,
-        projectileSpeed = 340,
-        projectileRadius = 5,
-        projectileColor = { 220, 215, 150, 255 },
-        size = 28,
-        color = { 90, 150, 250, 255 },
-        outline = { 220, 235, 255, 255 },
+    archer_tower = {
+        name = "弓箭塔", cost = 50, damage = 20, range = 160,
+        fireRate = 1.2, projectileSpeed = 350,
+        color = {100, 150, 255}, size = 24,
     },
-    warrior = {
-        name = "战士塔",
-        cost = 80,
-        damage = 42,
-        range = 72,
-        fireRate = 0.9,
-        projectileSpeed = 0,
-        splash = 48,
-        size = 32,
-        color = { 100, 205, 120, 255 },
-        outline = { 225, 255, 225, 255 },
+    cannon_tower = {
+        name = "火炮塔", cost = 100, damage = 60, range = 200,
+        fireRate = 0.5, projectileSpeed = 250,
+        color = {200, 100, 50}, size = 28,
+        splash = 50,
     },
-    monk = {
-        name = "僧侣塔",
-        cost = 95,
-        damage = 12,
-        range = 140,
-        fireRate = 0.65,
-        projectileSpeed = 220,
-        projectileRadius = 6,
-        projectileColor = { 255, 235, 180, 255 },
-        slowFactor = 0.55,
-        slowDuration = 1.8,
-        size = 26,
-        color = { 245, 205, 90, 255 },
-        outline = { 255, 245, 210, 255 },
+    frost_tower = {
+        name = "冰霜塔", cost = 75, damage = 10, range = 140,
+        fireRate = 0.8, projectileSpeed = 200,
+        color = {100, 200, 255}, size = 24,
+        slow = true, slowDuration = 2.0, slowFactor = 0.4,
+    },
+    lightning_tower = {
+        name = "闪电塔", cost = 150, damage = 35, range = 180,
+        fireRate = 1.5, projectileSpeed = 999,
+        color = {255, 255, 100}, size = 26,
+        chain = 3,
     },
 }
 
-local function selectTarget(tower, enemies)
-    local bestEnemy = nil
-    local bestProgress = -1
-    local rangeSquared = tower.range * tower.range
-
-    for _, enemy in ipairs(enemies) do
-        if enemy.alive then
-            local distanceSquared = Utils.DistanceSquared(tower.x, tower.y, enemy.x, enemy.y)
-            if distanceSquared <= rangeSquared and enemy.progress > bestProgress then
-                bestEnemy = enemy
-                bestProgress = enemy.progress
-            end
-        end
-    end
-
-    return bestEnemy
-end
-
-local function dealSplashDamage(centerEnemy, enemies, radius, damage, enemyApi)
-    local splashRadiusSquared = radius * radius
-    for _, enemy in ipairs(enemies) do
-        if enemy ~= centerEnemy and enemy.alive then
-            local distanceSquared = Utils.DistanceSquared(centerEnemy.x, centerEnemy.y, enemy.x, enemy.y)
-            if distanceSquared <= splashRadiusSquared then
-                enemyApi.Damage(enemy, damage)
-            end
-        end
-    end
-end
-
-function Tower.Create(typeName, x, y)
-    local definition = Tower.types[typeName]
-    if not definition then
-        return nil
-    end
-
-    return {
-        type = typeName,
-        name = definition.name,
-        x = x,
-        y = y,
-        level = 1,
-        cooldown = 0,
-        damage = definition.damage,
-        range = definition.range,
-        fireRate = definition.fireRate,
-        projectileSpeed = definition.projectileSpeed,
-        projectileRadius = definition.projectileRadius or 0,
-        projectileColor = definition.projectileColor,
-        splash = definition.splash or 0,
-        slowFactor = definition.slowFactor,
-        slowDuration = definition.slowDuration,
-        size = definition.size,
-        color = definition.color,
-        outline = definition.outline,
-        baseCost = definition.cost,
-        target = nil,
-        pulseTimer = 0,
+function Tower.Create(typeName, x, y, gold)
+    local config = Tower.types[typeName]
+    if not config or gold < config.cost then return nil, gold end
+    gold = gold - config.cost
+    local tower = {
+        type = typeName, config = config,
+        x = x, y = y, cooldown = 0,
+        level = 1, target = nil,
+        _warCryATK = 0, _warCryTimer = 0,
+        damage = config.damage,
+        range = config.range,
     }
+    table.insert(Tower.list, tower)
+    return tower, gold
 end
 
-function Tower.GetCost(typeName)
-    local definition = Tower.types[typeName]
-    if definition then
-        return definition.cost
+function Tower.UpdateAll(dt)
+    for _, tower in ipairs(Tower.list) do
+        Tower.Update(tower, dt)
     end
-    return 0
 end
 
-function Tower.GetUpgradeCost(tower)
-    return math.floor(tower.baseCost * (0.9 + tower.level * 0.85))
-end
-
-function Tower.CanUpgrade(tower)
-    return tower.level < 3
-end
-
-function Tower.Upgrade(tower)
-    if not Tower.CanUpgrade(tower) then
-        return false
-    end
-
-    tower.level = tower.level + 1
-    tower.damage = math.floor(tower.damage * 1.45)
-    tower.range = tower.range * 1.12
-    tower.fireRate = tower.fireRate * 1.08
-    tower.pulseTimer = 0.18
-    return true
-end
-
-function Tower.Update(tower, dt, enemies, spawnProjectile, enemyApi)
-    if tower.pulseTimer > 0 then
-        tower.pulseTimer = math.max(0, tower.pulseTimer - dt)
-    end
-
+function Tower.Update(tower, dt)
     tower.cooldown = tower.cooldown - dt
-    tower.target = selectTarget(tower, enemies)
 
-    if not tower.target or tower.cooldown > 0 then
-        return
+    if tower._warCryTimer > 0 then
+        tower._warCryTimer = tower._warCryTimer - dt
+    else
+        tower._warCryATK = 0
     end
 
-    tower.cooldown = 1.0 / tower.fireRate
-    tower.pulseTimer = 0.12
-
-    if tower.projectileSpeed > 0 then
-        spawnProjectile({
-            x = tower.x,
-            y = tower.y,
-            target = tower.target,
-            damage = tower.damage,
-            speed = tower.projectileSpeed,
-            radius = tower.projectileRadius,
-            color = tower.projectileColor,
-            splash = tower.splash,
-            slowFactor = tower.slowFactor,
-            slowDuration = tower.slowDuration,
-        })
-        return
+    local closest = nil
+    local closestDist = tower.range
+    for _, enemy in ipairs(Enemy.list) do
+        if enemy.alive then
+            local dx = enemy.x - tower.x
+            local dy = enemy.y - tower.y
+            local dist = math.sqrt(dx*dx + dy*dy)
+            if dist < closestDist then
+                closestDist = dist
+                closest = enemy
+            end
+        end
     end
 
-    enemyApi.Damage(tower.target, tower.damage)
-    if tower.splash > 0 then
-        dealSplashDamage(tower.target, enemies, tower.splash, tower.damage * 0.5, enemyApi)
+    if closest and tower.cooldown <= 0 then
+        tower.cooldown = 1.0 / tower.config.fireRate
+        local dmg = tower.damage * (1 + tower._warCryATK)
+
+        if tower.config.chain then
+            Tower.ChainLightning(tower, closest, dmg)
+        elseif Projectile then
+            Projectile.Create(
+                tower.x, tower.y, closest, dmg,
+                tower.config.projectileSpeed,
+                tower.config.color,
+                tower.config.slow or false,
+                tower.config.slowDuration or 0,
+                tower.config.slowFactor or 1.0,
+                tower.config.splash or 0
+            )
+        end
     end
 end
 
-function Tower.ContainsPoint(tower, x, y)
-    return Utils.PointInCircle(x, y, tower.x, tower.y, tower.size * 0.8)
+function Tower.ChainLightning(tower, firstTarget, damage)
+    local hit = { firstTarget }
+    Enemy.Damage(firstTarget, damage)
+    if Particle then
+        Particle.Spawn("lightning", tower.x, tower.y, 0)
+        Particle.Spawn("lightning", firstTarget.x, firstTarget.y, 0)
+    end
+
+    local current = firstTarget
+    for i = 2, tower.config.chain do
+        local nextTarget = nil
+        local nextDist = 120
+        for _, enemy in ipairs(Enemy.list) do
+            if enemy.alive then
+                local alreadyHit = false
+                for _, h in ipairs(hit) do
+                    if h == enemy then alreadyHit = true; break end
+                end
+                if not alreadyHit then
+                    local dx = enemy.x - current.x
+                    local dy = enemy.y - current.y
+                    local dist = math.sqrt(dx*dx + dy*dy)
+                    if dist < nextDist then
+                        nextDist = dist
+                        nextTarget = enemy
+                    end
+                end
+            end
+        end
+        if nextTarget then
+            Enemy.Damage(nextTarget, damage * 0.7)
+            if Particle then
+                Particle.Spawn("lightning", nextTarget.x, nextTarget.y, 0)
+            end
+            table.insert(hit, nextTarget)
+            current = nextTarget
+        else
+            break
+        end
+    end
 end
 
-function Tower.Draw(nvg, tower, transform, selected)
-    local x, y = Utils.ToScreen(transform, tower.x, tower.y)
-    local size = Utils.ToScreenSize(transform, tower.size)
-    local pulseScale = 1.0 + tower.pulseTimer * 0.45
-    local half = size * 0.5 * pulseScale
+function Tower.Upgrade(tower, gold)
+    local cost = tower.config.cost * tower.level
+    if gold < cost or tower.level >= 3 then return false, gold end
+    gold = gold - cost
+    tower.level = tower.level + 1
+    tower.damage = math.floor(tower.damage * 1.4)
+    tower.range = tower.range * 1.1
+    return true, gold
+end
 
+function Tower.DrawAll(nvg)
+    for _, tower in ipairs(Tower.list) do
+        Tower.Draw(nvg, tower)
+    end
+end
+
+function Tower.Draw(nvg, tower)
+    local c = tower.config.color
+    
+    nvgFillColor(nvg, nvgRGBA(60, 60, 60, 255))
     nvgBeginPath(nvg)
-    nvgRect(nvg, x - half, y - half, half * 2, half * 2)
-    nvgFillColor(nvg, nvgRGBA(tower.color[1], tower.color[2], tower.color[3], tower.color[4]))
+    nvgCircle(nvg, tower.x, tower.y, c.size + 6)
     nvgFill(nvg)
-    nvgStrokeColor(nvg, nvgRGBA(tower.outline[1], tower.outline[2], tower.outline[3], tower.outline[4]))
-    nvgStrokeWidth(nvg, math.max(2, size * 0.12))
-    nvgStroke(nvg)
 
+    nvgFillColor(nvg, c[1], c[2], c[3], 255)
     nvgBeginPath(nvg)
-    nvgMoveTo(nvg, x, y - half * 0.9)
-    nvgLineTo(nvg, x + half * 0.9, y)
-    nvgLineTo(nvg, x, y + half * 0.9)
-    nvgLineTo(nvg, x - half * 0.9, y)
-    nvgClosePath(nvg)
-    nvgStrokeColor(nvg, nvgRGBA(18, 24, 28, 160))
-    nvgStrokeWidth(nvg, math.max(1, size * 0.07))
-    nvgStroke(nvg)
+    nvgCircle(nvg, tower.x, tower.y, c.size)
+    nvgFill(nvg)
 
-    if selected then
-        nvgBeginPath(nvg)
-        nvgCircle(nvg, x, y, Utils.ToScreenSize(transform, tower.range))
-        nvgStrokeColor(nvg, nvgRGBA(255, 235, 140, 180))
-        nvgStrokeWidth(nvg, math.max(2, size * 0.08))
-        nvgStroke(nvg)
-    end
+    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
+    nvgFontSize(nvg, 10)
+    nvgTextAlign(nvg, 1)
+    nvgText(nvg, tower.x, tower.y + 4, "Lv" .. tower.level)
 end
 
 return Tower

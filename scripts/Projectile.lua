@@ -1,83 +1,78 @@
-local Utils = require("scripts/Utils")
 
 local Projectile = {}
+Projectile.list = {}
 
-local function splashDamage(projectile, enemies, enemyApi)
-    if projectile.splash <= 0 then
-        return
-    end
+function Projectile.Create(x, y, target, damage, speed, color,
+                            slow, slowDuration, slowFactor, splash)
+    local p = {
+        x = x, y = y, target = target,
+        damage = damage, speed = speed,
+        color = color or {255, 255, 255},
+        slow = slow or false,
+        slowDuration = slowDuration or 0,
+        slowFactor = slowFactor or 1.0,
+        splash = splash or 0,
+        alive = true,
+    }
+    table.insert(Projectile.list, p)
+    return p
+end
 
-    local splashRadiusSquared = projectile.splash * projectile.splash
-    for _, enemy in ipairs(enemies) do
-        if enemy ~= projectile.target and enemy.alive then
-            local distanceSquared = Utils.DistanceSquared(projectile.target.x, projectile.target.y, enemy.x, enemy.y)
-            if distanceSquared <= splashRadiusSquared then
-                enemyApi.Damage(enemy, projectile.damage * 0.5)
+function Projectile.UpdateAll(dt)
+    for i = #Projectile.list, 1, -1 do
+        local p = Projectile.list[i]
+        if not p.target or not p.target.alive then
+            table.remove(Projectile.list, i)
+        else
+            local dx = p.target.x - p.x
+            local dy = p.target.y - p.y
+            local dist = math.sqrt(dx*dx + dy*dy)
+
+            if dist < 12 then
+                if p.target.config then
+                    Enemy.Damage(p.target, p.damage)
+                    if p.slow then
+                        p.target._slowFactor = p.slowFactor
+                        p.target._slowTimer = p.slowDuration
+                    end
+                else
+                    Hero.TakeDamage(p.damage)
+                end
+
+                if p.splash > 0 then
+                    for _, enemy in ipairs(Enemy.list) do
+                        if enemy ~= p.target and enemy.alive then
+                            local sdx = enemy.x - p.target.x
+                            local sdy = enemy.y - p.target.y
+                            if math.sqrt(sdx*sdx + sdy*sdy) < p.splash then
+                                Enemy.Damage(enemy, p.damage * 0.5)
+                            end
+                        end
+                    end
+                    if Particle then
+                        Particle.Spawn("explosion", p.target.x, p.target.y, 0)
+                    end
+                end
+
+                table.remove(Projectile.list, i)
+            else
+                p.x = p.x + (dx / dist) * p.speed * dt
+                p.y = p.y + (dy / dist) * p.speed * dt
             end
         end
     end
 end
 
-function Projectile.Create(data)
-    return {
-        x = data.x,
-        y = data.y,
-        target = data.target,
-        damage = data.damage,
-        speed = data.speed,
-        radius = data.radius or 5,
-        color = data.color or { 255, 255, 255, 255 },
-        splash = data.splash or 0,
-        slowFactor = data.slowFactor,
-        slowDuration = data.slowDuration,
-        alive = true,
-    }
+function Projectile.DrawAll(nvg)
+    for _, p in ipairs(Projectile.list) do
+        Projectile.Draw(nvg, p)
+    end
 end
 
-function Projectile.Update(projectile, dt, enemies, enemyApi)
-    if not projectile.alive then
-        return
-    end
-
-    if not projectile.target or not projectile.target.alive then
-        projectile.alive = false
-        return
-    end
-
-    local dx = projectile.target.x - projectile.x
-    local dy = projectile.target.y - projectile.y
-    local distance = math.sqrt(dx * dx + dy * dy)
-    local maxStep = projectile.speed * dt
-
-    if distance <= maxStep or distance <= projectile.radius then
-        projectile.x = projectile.target.x
-        projectile.y = projectile.target.y
-        enemyApi.Damage(projectile.target, projectile.damage)
-
-        if projectile.slowFactor and projectile.slowDuration then
-            enemyApi.ApplySlow(projectile.target, projectile.slowFactor, projectile.slowDuration)
-        end
-
-        splashDamage(projectile, enemies, enemyApi)
-        projectile.alive = false
-        return
-    end
-
-    projectile.x = projectile.x + dx / distance * maxStep
-    projectile.y = projectile.y + dy / distance * maxStep
-end
-
-function Projectile.Draw(nvg, projectile, transform)
-    if projectile.alive == false then
-        return
-    end
-
-    local x, y = Utils.ToScreen(transform, projectile.x, projectile.y)
-    local radius = math.max(2, Utils.ToScreenSize(transform, projectile.radius))
-
+function Projectile.Draw(nvg, p)
+    nvgFillColor(nvg, p.color[1], p.color[2], p.color[3], 255)
     nvgBeginPath(nvg)
-    nvgCircle(nvg, x, y, radius)
-    nvgFillColor(nvg, nvgRGBA(projectile.color[1], projectile.color[2], projectile.color[3], projectile.color[4]))
+    nvgCircle(nvg, p.x, p.y, 5)
     nvgFill(nvg)
 end
 
