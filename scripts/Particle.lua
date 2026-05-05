@@ -18,6 +18,12 @@ function Particle.Spawn(typeName, x, y, facing)
     local def = Particle.types[typeName]
     if not def then return end
 
+    local data = nil
+    if type(facing) == "table" then
+        data = facing
+        facing = data.facing
+    end
+
     local p = {
         type = typeName,
         x = x, y = y,
@@ -26,6 +32,7 @@ function Particle.Spawn(typeName, x, y, facing)
         maxLife = def.life,
         size = def.size,
         color = def.color,
+        data = data,
     }
     table.insert(Particle.list, p)
 end
@@ -49,8 +56,116 @@ end
 function Particle.Draw(nvg, p)
     local alpha = p.life / p.maxLife
     local size = p.size * (0.5 + alpha * 0.5)
-    
-    nvgFillColor(nvg, p.color[1], p.color[2], p.color[3], math.floor(alpha * 200))
+    local color = nvgRGBA(p.color[1], p.color[2], p.color[3], math.floor(alpha * 220))
+
+    if p.type == "slash" then
+        local data = p.data or {}
+        local x1 = data.startX or (p.x - p.facing * size)
+        local y1 = data.startY or (p.y - size * 0.4)
+        local x2 = data.endX or (p.x + p.facing * size)
+        local y2 = data.endY or (p.y + size * 0.4)
+
+        nvgStrokeColor(nvg, color)
+        nvgStrokeWidth(nvg, 5)
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, x1, y1)
+        nvgLineTo(nvg, x2, y2)
+        nvgStroke(nvg)
+
+        nvgStrokeColor(nvg, nvgRGBA(255, 255, 255, math.floor(alpha * 140)))
+        nvgStrokeWidth(nvg, 2)
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, x1 + p.facing * 8, y1 - 4)
+        nvgLineTo(nvg, x2 + p.facing * 8, y2 - 4)
+        nvgStroke(nvg)
+        return
+    end
+
+    if p.type == "charge" then
+        nvgStrokeColor(nvg, color)
+        nvgStrokeWidth(nvg, 4)
+        for i = 0, 2 do
+            local offset = (i - 1) * 8
+            nvgBeginPath(nvg)
+            nvgMoveTo(nvg, p.x - p.facing * size * 1.2, p.y + offset)
+            nvgLineTo(nvg, p.x + p.facing * size * 1.2, p.y + offset * 0.5)
+            nvgStroke(nvg)
+        end
+        return
+    end
+
+    if p.type == "whirlwind" then
+        nvgStrokeColor(nvg, color)
+        nvgStrokeWidth(nvg, 4)
+        nvgBeginPath(nvg)
+        nvgArc(nvg, p.x, p.y, size * 0.7, -1.8 + (1 - alpha), 1.2 + (1 - alpha), 1)
+        nvgStroke(nvg)
+        nvgBeginPath(nvg)
+        nvgArc(nvg, p.x, p.y, size, 1.0 - (1 - alpha), 3.4 - (1 - alpha), 1)
+        nvgStroke(nvg)
+        return
+    end
+
+    if p.type == "buff" then
+        nvgStrokeColor(nvg, color)
+        nvgStrokeWidth(nvg, 3)
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, p.x, p.y, size * 0.7)
+        nvgStroke(nvg)
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, p.x, p.y - size)
+        nvgLineTo(nvg, p.x, p.y + size)
+        nvgMoveTo(nvg, p.x - size, p.y)
+        nvgLineTo(nvg, p.x + size, p.y)
+        nvgStroke(nvg)
+        return
+    end
+
+    if p.type == "lightning" then
+        nvgStrokeColor(nvg, color)
+        nvgStrokeWidth(nvg, 3)
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, p.x - size * 0.5, p.y - size)
+        nvgLineTo(nvg, p.x + size * 0.1, p.y - size * 0.2)
+        nvgLineTo(nvg, p.x - size * 0.1, p.y - size * 0.2)
+        nvgLineTo(nvg, p.x + size * 0.5, p.y + size)
+        nvgStroke(nvg)
+        return
+    end
+
+    if p.type == "meteor" then
+        nvgStrokeColor(nvg, color)
+        nvgStrokeWidth(nvg, 4)
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, p.x - size * 0.6, p.y - size * 0.6)
+        nvgLineTo(nvg, p.x + size * 0.6, p.y + size * 0.6)
+        nvgMoveTo(nvg, p.x + size * 0.1, p.y - size)
+        nvgLineTo(nvg, p.x - size * 0.2, p.y - size * 0.1)
+        nvgStroke(nvg)
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, p.x, p.y, size * 0.35)
+        nvgStroke(nvg)
+        return
+    end
+
+    if p.type == "explosion" or p.type == "death" or p.type == "hit" then
+        nvgStrokeColor(nvg, color)
+        nvgStrokeWidth(nvg, p.type == "hit" and 3 or 4)
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, p.x, p.y, size * 0.7)
+        nvgStroke(nvg)
+        if p.type ~= "hit" then
+            nvgBeginPath(nvg)
+            nvgMoveTo(nvg, p.x - size, p.y)
+            nvgLineTo(nvg, p.x + size, p.y)
+            nvgMoveTo(nvg, p.x, p.y - size)
+            nvgLineTo(nvg, p.x, p.y + size)
+            nvgStroke(nvg)
+        end
+        return
+    end
+
+    nvgFillColor(nvg, color)
     nvgBeginPath(nvg)
     nvgCircle(nvg, p.x, p.y, size)
     nvgFill(nvg)

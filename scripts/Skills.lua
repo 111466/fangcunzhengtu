@@ -96,11 +96,11 @@ end
 
 function Skills.Cast(slotIndex, targetX, targetY, enemies, towers)
     local slot = Skills.slots[slotIndex]
-    if not slot or slot.level <= 0 then return false end
-    if slot.cooldownTimer > 0 then return false end
+    if not slot or slot.level <= 0 then return false, 0, 0 end
+    if slot.cooldownTimer > 0 then return false, 0, 0 end
 
     local def = Skills.definitions[slot.id]
-    if Hero.state.mana < def.manaCost then return false end
+    if Hero.state.mana < def.manaCost then return false, 0, 0 end
 
     Hero.state.mana = Hero.state.mana - def.manaCost
     slot.cooldownTimer = def.cooldown
@@ -108,18 +108,20 @@ function Skills.Cast(slotIndex, targetX, targetY, enemies, towers)
     local level = slot.level
     local baseATK = Hero.config.baseATK + Hero.state.bonusATK
     local heroATK = math.floor(baseATK * (1 + (Hero.state._warCryATK or 0)))
+    local reward = 0
+    local kills = 0
 
     if slot.id == "whirlwind" then
-        Skills.Whirlwind(heroATK, def, level, enemies)
+        reward, kills = Skills.Whirlwind(heroATK, def, level, enemies)
     elseif slot.id == "charge" then
-        Skills.Charge(heroATK, def, level, enemies)
+        reward, kills = Skills.Charge(heroATK, def, level, enemies)
     elseif slot.id == "war_cry" then
         Skills.WarCry(def, level, towers)
     elseif slot.id == "meteor" then
-        Skills.Meteor(heroATK, def, level, targetX, targetY, enemies)
+        reward, kills = Skills.Meteor(heroATK, def, level, targetX, targetY, enemies)
     end
 
-    return true
+    return true, reward, kills
 end
 
 function Skills.Whirlwind(heroATK, def, level, enemies)
@@ -128,14 +130,21 @@ function Skills.Whirlwind(heroATK, def, level, enemies)
     local range = def.range
     local knockback = def.knockback[level]
 
+    local reward = 0
+    local kills = 0
     for _, enemy in ipairs(enemies) do
         if enemy.alive then
             local dx = enemy.x - Hero.state.x
             local dy = enemy.y - Hero.state.y
             local dist = math.sqrt(dx*dx + dy*dy)
             if dist < range then
-                Enemy.Damage(enemy, damage)
+                local enemyReward = Enemy.Damage(enemy, damage)
                 Hero.state.totalDamage = Hero.state.totalDamage + damage
+                Hero.ApplyDamageEffects(enemy, damage)
+                if enemyReward then
+                    reward = reward + enemyReward
+                    kills = kills + 1
+                end
                 if knockback > 0 and dist > 0 then
                     enemy.x = enemy.x + (dx / dist) * knockback
                     enemy.y = enemy.y + (dy / dist) * knockback
@@ -149,6 +158,7 @@ function Skills.Whirlwind(heroATK, def, level, enemies)
     end
     Hero.state.animState = "skill"
     Hero.state.animTimer = 0.5
+    return reward, kills
 end
 
 function Skills.Charge(heroATK, def, level, enemies)
@@ -157,8 +167,10 @@ function Skills.Charge(heroATK, def, level, enemies)
     local dist = def.chargeDist[level]
     local stun = def.stunDuration[level]
 
+    local reward = 0
+    local kills = 0
     local startX = Hero.state.x
-    Hero.state.x = Hero.state.x + Hero.state.facing * dist
+    Hero.state.x = math.max(20, math.min(Hero.state.x + Hero.state.facing * dist, 1430))
 
     for _, enemy in ipairs(enemies) do
         if enemy.alive then
@@ -166,8 +178,13 @@ function Skills.Charge(heroATK, def, level, enemies)
             local maxX = math.max(startX, Hero.state.x) + 30
             if enemy.x >= minX and enemy.x <= maxX
                 and math.abs(enemy.y - Hero.state.y) < 40 then
-                Enemy.Damage(enemy, damage)
+                local enemyReward = Enemy.Damage(enemy, damage)
                 Hero.state.totalDamage = Hero.state.totalDamage + damage
+                Hero.ApplyDamageEffects(enemy, damage)
+                if enemyReward then
+                    reward = reward + enemyReward
+                    kills = kills + 1
+                end
                 if stun > 0 then
                     enemy.stunTimer = stun
                 end
@@ -176,10 +193,13 @@ function Skills.Charge(heroATK, def, level, enemies)
     end
 
     if Particle then
-        Particle.Spawn("charge", startX, Hero.state.y, Hero.state.facing)
+        Particle.Spawn("charge", (startX + Hero.state.x) * 0.5, Hero.state.y, {
+            facing = Hero.state.facing,
+        })
     end
     Hero.state.animState = "skill"
     Hero.state.animTimer = 0.4
+    return reward, kills
 end
 
 function Skills.WarCry(def, level, towers)
@@ -209,14 +229,21 @@ function Skills.Meteor(heroATK, def, level, targetX, targetY, enemies)
     local radius = def.aoeRadius[level]
     local burn = def.burn[level]
 
+    local reward = 0
+    local kills = 0
     for _, enemy in ipairs(enemies) do
         if enemy.alive then
             local dx = enemy.x - targetX
             local dy = enemy.y - targetY
             local dist = math.sqrt(dx*dx + dy*dy)
             if dist < radius then
-                Enemy.Damage(enemy, damage)
+                local enemyReward = Enemy.Damage(enemy, damage)
                 Hero.state.totalDamage = Hero.state.totalDamage + damage
+                Hero.ApplyDamageEffects(enemy, damage)
+                if enemyReward then
+                    reward = reward + enemyReward
+                    kills = kills + 1
+                end
                 if burn then
                     enemy.burnTimer = 3.0
                     enemy.burnDamage = math.floor(heroATK * 0.3)
@@ -228,6 +255,7 @@ function Skills.Meteor(heroATK, def, level, targetX, targetY, enemies)
     if Particle then
         Particle.Spawn("meteor", targetX, targetY, 0)
     end
+    return reward, kills
 end
 
 function Skills.Upgrade(slotIndex, gold)

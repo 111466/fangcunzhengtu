@@ -5,13 +5,24 @@ InputController.state = {
     moveX = 0, moveY = 0,
     attacking = false,
     placingTower = nil,
-    skillTarget = nil,
 }
 
-function InputController.HandleKeyboard(dt)
+function InputController.HandleInput(dt)
     local s = InputController.state
+    local actions = {
+        placeTower = nil,
+        placeX = nil,
+        placeY = nil,
+        castSkill = nil,
+        castX = nil,
+        castY = nil,
+        upgradeSkill = nil,
+        buyEquipmentSlot = nil,
+        upgradeSelectedTower = false,
+    }
     s.moveX = 0
     s.moveY = 0
+    s.attacking = false
 
     if input:GetKeyDown(KEY_A) or input:GetKeyDown(KEY_LEFT) then
         s.moveX = s.moveX - 1
@@ -32,29 +43,85 @@ function InputController.HandleKeyboard(dt)
         s.moveY = s.moveY / len
     end
 
-    s.attacking = input:GetKeyDown(KEY_SPACE) or input:GetMouseButtonDown(MOUSEB_LEFT)
+    if input:GetKeyPress(KEY_5) then s.placingTower = "archer_tower" end
+    if input:GetKeyPress(KEY_6) then s.placingTower = "cannon_tower" end
+    if input:GetKeyPress(KEY_7) then s.placingTower = "frost_tower" end
+    if input:GetKeyPress(KEY_8) then s.placingTower = "lightning_tower" end
 
     if input:GetKeyPress(KEY_1) then
-        Skills.Cast(1, Hero.state.x, Hero.state.y, Enemy.list, Tower.list)
+        actions.castSkill = 1
+        actions.castX = Hero.state.x
+        actions.castY = Hero.state.y
     end
     if input:GetKeyPress(KEY_2) then
-        Skills.Cast(2, Hero.state.x, Hero.state.y, Enemy.list, Tower.list)
+        actions.castSkill = 2
+        actions.castX = Hero.state.x
+        actions.castY = Hero.state.y
     end
     if input:GetKeyPress(KEY_3) then
-        Skills.Cast(3, Hero.state.x, Hero.state.y, Enemy.list, Tower.list)
+        actions.castSkill = 3
+        actions.castX = Hero.state.x
+        actions.castY = Hero.state.y
     end
     if input:GetKeyPress(KEY_4) then
-        local mx, my = input:GetMousePosition()
-        Skills.Cast(4, mx, my, Enemy.list, Tower.list)
+        local pos = input:GetMousePosition()
+        local dpr = graphics:GetDPR()
+        actions.castSkill = 4
+        actions.castX = pos.x / dpr
+        actions.castY = pos.y / dpr
+    end
+
+    if input:GetKeyPress(KEY_F1) then actions.upgradeSkill = 1 end
+    if input:GetKeyPress(KEY_F2) then actions.upgradeSkill = 2 end
+    if input:GetKeyPress(KEY_F3) then actions.upgradeSkill = 3 end
+    if input:GetKeyPress(KEY_F4) then actions.upgradeSkill = 4 end
+
+    if input:GetKeyPress(KEY_Z) then actions.buyEquipmentSlot = "weapon" end
+    if input:GetKeyPress(KEY_X) then actions.buyEquipmentSlot = "armor" end
+    if input:GetKeyPress(KEY_C) then actions.buyEquipmentSlot = "accessory" end
+    if input:GetKeyPress(KEY_U) then actions.upgradeSelectedTower = true end
+
+    if input:GetMouseButtonPress(MOUSEB_LEFT) then
+        local pos = input:GetMousePosition()
+        local dpr = graphics:GetDPR()
+        local mx = pos.x / dpr
+        local my = pos.y / dpr
+        local screenWidth = graphics:GetWidth() / dpr
+        local screenHeight = graphics:GetHeight() / dpr
+
+        local towerType = UI.GetTowerCardAt(mx, my, screenWidth, screenHeight)
+        if towerType then
+            s.placingTower = towerType
+        else
+            local equipSlot = UI.GetEquipmentCardAt(mx, my, screenWidth, screenHeight)
+            if equipSlot then
+                actions.buyEquipmentSlot = equipSlot
+            else
+                local selectedTower = Tower.SelectAt(mx, my)
+                if not selectedTower then
+                    s.attacking = true
+                end
+            end
+        end
+    end
+
+    if input:GetKeyDown(KEY_SPACE) then
+        s.attacking = true
     end
 
     if input:GetMouseButtonDown(MOUSEB_RIGHT) then
-        local mx, my = input:GetMousePosition()
-        if InputController.state.placingTower then
-            return InputController.state.placingTower, mx, my
+        local pos = input:GetMousePosition()
+        local dpr = graphics:GetDPR()
+        local mx = pos.x / dpr
+        local my = pos.y / dpr
+        if s.placingTower then
+            actions.placeTower = s.placingTower
+            actions.placeX = mx
+            actions.placeY = my
         end
     end
-    return nil, nil, nil
+
+    return actions
 end
 
 return InputController

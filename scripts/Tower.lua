@@ -1,6 +1,7 @@
 
 local Tower = {}
 Tower.list = {}
+Tower.selected = nil
 
 Tower.types = {
     archer_tower = {
@@ -45,12 +46,19 @@ function Tower.Create(typeName, x, y, gold)
 end
 
 function Tower.UpdateAll(dt)
+    local totalReward = 0
+    local totalKills = 0
     for _, tower in ipairs(Tower.list) do
-        Tower.Update(tower, dt)
+        local reward, kills = Tower.Update(tower, dt)
+        totalReward = totalReward + reward
+        totalKills = totalKills + kills
     end
+    return totalReward, totalKills
 end
 
 function Tower.Update(tower, dt)
+    local totalReward = 0
+    local totalKills = 0
     tower.cooldown = tower.cooldown - dt
 
     if tower._warCryTimer > 0 then
@@ -78,7 +86,9 @@ function Tower.Update(tower, dt)
         local dmg = tower.damage * (1 + tower._warCryATK)
 
         if tower.config.chain then
-            Tower.ChainLightning(tower, closest, dmg)
+            local reward, kills = Tower.ChainLightning(tower, closest, dmg)
+            totalReward = totalReward + reward
+            totalKills = totalKills + kills
         elseif Projectile then
             Projectile.Create(
                 tower.x, tower.y, closest, dmg,
@@ -91,11 +101,18 @@ function Tower.Update(tower, dt)
             )
         end
     end
+    return totalReward, totalKills
 end
 
 function Tower.ChainLightning(tower, firstTarget, damage)
     local hit = { firstTarget }
-    Enemy.Damage(firstTarget, damage)
+    local totalReward = 0
+    local totalKills = 0
+    local reward = Enemy.Damage(firstTarget, damage)
+    if reward then
+        totalReward = totalReward + reward
+        totalKills = totalKills + 1
+    end
     if Particle then
         Particle.Spawn("lightning", tower.x, tower.y, 0)
         Particle.Spawn("lightning", firstTarget.x, firstTarget.y, 0)
@@ -123,7 +140,11 @@ function Tower.ChainLightning(tower, firstTarget, damage)
             end
         end
         if nextTarget then
-            Enemy.Damage(nextTarget, damage * 0.7)
+            local chainReward = Enemy.Damage(nextTarget, damage * 0.7)
+            if chainReward then
+                totalReward = totalReward + chainReward
+                totalKills = totalKills + 1
+            end
             if Particle then
                 Particle.Spawn("lightning", nextTarget.x, nextTarget.y, 0)
             end
@@ -133,6 +154,7 @@ function Tower.ChainLightning(tower, firstTarget, damage)
             break
         end
     end
+    return totalReward, totalKills
 end
 
 function Tower.Upgrade(tower, gold)
@@ -153,21 +175,52 @@ end
 
 function Tower.Draw(nvg, tower)
     local c = tower.config.color
-    
+
     nvgFillColor(nvg, nvgRGBA(60, 60, 60, 255))
     nvgBeginPath(nvg)
-    nvgCircle(nvg, tower.x, tower.y, c.size + 6)
+    nvgCircle(nvg, tower.x, tower.y, tower.config.size + 6)
     nvgFill(nvg)
 
-    nvgFillColor(nvg, c[1], c[2], c[3], 255)
+    nvgFillColor(nvg, nvgRGBA(c[1], c[2], c[3], 255))
     nvgBeginPath(nvg)
-    nvgCircle(nvg, tower.x, tower.y, c.size)
+    nvgCircle(nvg, tower.x, tower.y, tower.config.size)
     nvgFill(nvg)
+
+    nvgStrokeColor(nvg, nvgRGBA(255, 255, 255, 180))
+    nvgStrokeWidth(nvg, 2)
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, tower.x - 8, tower.y)
+    nvgLineTo(nvg, tower.x + 8, tower.y)
+    nvgMoveTo(nvg, tower.x, tower.y - 8)
+    nvgLineTo(nvg, tower.x, tower.y + 8)
+    nvgStroke(nvg)
+
+    if Tower.selected == tower then
+        nvgStrokeColor(nvg, nvgRGBA(255, 240, 140, 255))
+        nvgStrokeWidth(nvg, 3)
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, tower.x, tower.y, tower.range)
+        nvgStroke(nvg)
+    end
 
     nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
     nvgFontSize(nvg, 10)
     nvgTextAlign(nvg, 1)
     nvgText(nvg, tower.x, tower.y + 4, "Lv" .. tower.level)
+end
+
+function Tower.SelectAt(x, y)
+    Tower.selected = nil
+    for i = #Tower.list, 1, -1 do
+        local tower = Tower.list[i]
+        local dx = x - tower.x
+        local dy = y - tower.y
+        if math.sqrt(dx * dx + dy * dy) <= tower.config.size + 10 then
+            Tower.selected = tower
+            return tower
+        end
+    end
+    return nil
 end
 
 return Tower

@@ -37,6 +37,10 @@ Hero.state = {
     skillSlots = { nil, nil, nil, nil },
     equipment = {},
     attackCooldown = 0,
+    burnOnHit = false,
+    lifesteal = 0,
+    manaRegenMul = 1.0,
+    thorns = 0,
 }
 
 function Hero.Init()
@@ -57,6 +61,11 @@ function Hero.Init()
     s.bonusDEF = 0
     s.bonusHP = 0
     s.bonusSpeed = 0
+    s.burnOnHit = false
+    s.lifesteal = 0
+    s.manaRegenMul = 1.0
+    s.thorns = 0
+    Hero.RecalcStats()
 end
 
 function Hero.Update(dt)
@@ -75,7 +84,7 @@ function Hero.Update(dt)
         end
     end
 
-    s.mana = math.min(Hero.config.maxMana, s.mana + Hero.config.manaRegen * dt)
+    s.mana = math.min(Hero.config.maxMana, s.mana + Hero.config.manaRegen * (s.manaRegenMul or 1.0) * dt)
 
     s.attackCooldown = s.attackCooldown - dt
 
@@ -103,7 +112,7 @@ end
 
 function Hero.Attack(enemies)
     local s = Hero.state
-    if s.attackCooldown > 0 then return end
+    if not s.alive or s.attackCooldown > 0 then return 0, 0 end
 
     local baseATK = Hero.config.baseATK + s.bonusATK
     local totalATK = math.floor(baseATK * (1 + (s._warCryATK or 0)))
@@ -123,7 +132,7 @@ function Hero.Attack(enemies)
     end
 
     if closest then
-        Enemy.Damage(closest, totalATK)
+        local reward = Enemy.Damage(closest, totalATK)
         s.attackCooldown = 1.0 / Hero.config.attackSpeed
         s.animState = "attack"
         s.animTimer = 0.25
@@ -133,14 +142,24 @@ function Hero.Attack(enemies)
         else s.facing = -1 end
 
         if Particle then
-            Particle.Spawn("slash", closest.x, closest.y, s.facing)
+            Particle.Spawn("slash", (s.x + closest.x) * 0.5, (s.y + closest.y) * 0.5, {
+                facing = s.facing,
+                startX = s.x + s.facing * 18,
+                startY = s.y - 14,
+                endX = closest.x,
+                endY = closest.y - 8,
+            })
         end
+
+        Hero.ApplyDamageEffects(closest, totalATK)
+        return reward or 0, reward and 1 or 0
     end
+    return 0, 0
 end
 
-function Hero.TakeDamage(amount)
+function Hero.TakeDamage(amount, source)
     local s = Hero.state
-    if not s.alive or s.invincibleTimer > 0 then return end
+    if not s.alive or s.invincibleTimer > 0 then return 0 end
 
     local baseDEF = Hero.config.baseDEF + s.bonusDEF
     local totalDEF = math.floor(baseDEF * (1 + (s._warCryDEF or 0)))
@@ -156,6 +175,10 @@ function Hero.TakeDamage(amount)
         Particle.Spawn("hit", s.x, s.y - 10, 0)
     end
 
+    if source and source.alive and s.thorns and s.thorns > 0 then
+        Enemy.Damage(source, math.max(1, math.floor(damage * s.thorns)))
+    end
+
     if s.hp <= 0 then
         s.hp = 0
         s.alive = false
@@ -165,6 +188,7 @@ function Hero.TakeDamage(amount)
             Particle.Spawn("death", s.x, s.y, 0)
         end
     end
+    return damage
 end
 
 function Hero.Heal(amount)
@@ -175,11 +199,14 @@ end
 
 function Hero.RecalcStats()
     local s = Hero.state
-    s.maxHP = Hero.config.baseHP + s.bonusHP
     s.bonusATK = 0
     s.bonusDEF = 0
     s.bonusHP = 0
     s.bonusSpeed = 0
+    s.burnOnHit = false
+    s.lifesteal = 0
+    s.manaRegenMul = 1.0
+    s.thorns = 0
     if s.equipment and Equipment then
         for _, itemId in pairs(s.equipment) do
             local item = Equipment.items[itemId]
@@ -188,10 +215,27 @@ function Hero.RecalcStats()
                 if item.stats.def then s.bonusDEF = s.bonusDEF + item.stats.def end
                 if item.stats.hp then s.bonusHP = s.bonusHP + item.stats.hp end
                 if item.stats.speed then s.bonusSpeed = s.bonusSpeed + item.stats.speed end
+                if item.special == "burn" then s.burnOnHit = true end
+                if item.special == "mana_regen" then s.manaRegenMul = 1.5 end
+                if item.special == "lifesteal" then s.lifesteal = 0.10 end
+                if item.special == "thorns" then s.thorns = 0.25 end
             end
         end
     end
     s.maxHP = Hero.config.baseHP + s.bonusHP
+    s.hp = math.min(s.hp, s.maxHP)
+end
+
+function Hero.ApplyDamageEffects(enemy, damage)
+    local s = Hero.state
+    if not enemy then return end
+    if s.burnOnHit and enemy.alive then
+        enemy.burnTimer = math.max(enemy.burnTimer or 0, 2.5)
+        enemy.burnDamage = math.max(enemy.burnDamage or 0, math.max(4, math.floor(damage * 0.18)))
+    end
+    if s.lifesteal and s.lifesteal > 0 then
+        Hero.Heal(math.max(1, math.floor(damage * s.lifesteal)))
+    end
 end
 
 function Hero.Draw(nvg)

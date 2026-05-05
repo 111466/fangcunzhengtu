@@ -101,7 +101,8 @@ function Enemy.Update(enemy, dt, heroState)
                 enemy.attackCooldown = 1.0 / enemy.config.attackSpeed
                 if Projectile then
                     Projectile.Create(enemy.x, enemy.y, heroState,
-                        enemy.config.damage, 200, {200, 50, 50})
+                        enemy.config.damage, 200, {200, 50, 50},
+                        false, 0, 1.0, 0, enemy)
                 end
             end
             return
@@ -118,7 +119,7 @@ function Enemy.Update(enemy, dt, heroState)
         local dy = heroState.y - enemy.y
         local dist = math.sqrt(dx*dx + dy*dy)
         if dist < (Hero.config.size + enemy.config.size) * 0.5 then
-            Hero.TakeDamage(enemy.config.damage * 0.5)
+            Hero.TakeDamage(enemy.config.damage * 0.5, enemy)
         end
     end
 
@@ -155,10 +156,63 @@ end
 function Enemy.Draw(nvg, enemy)
     local c = enemy.config
     local size = c.size
-    
-    nvgFillColor(nvg, c.color[1], c.color[2], c.color[3], 255)
+
+    nvgFillColor(nvg, nvgRGBA(c.color[1], c.color[2], c.color[3], 255))
     nvgBeginPath(nvg)
     nvgCircle(nvg, enemy.x, enemy.y, size)
+    nvgFill(nvg)
+
+    nvgStrokeColor(nvg, nvgRGBA(35, 35, 35, 240))
+    nvgStrokeWidth(nvg, 3)
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, enemy.x, enemy.y, size)
+    nvgStroke(nvg)
+
+    nvgStrokeColor(nvg, nvgRGBA(255, 255, 255, 160))
+    nvgStrokeWidth(nvg, 2)
+    if enemy.typeName == "grunt" then
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, enemy.x - size * 0.45, enemy.y + size * 0.1)
+        nvgLineTo(nvg, enemy.x + size * 0.45, enemy.y + size * 0.1)
+        nvgStroke(nvg)
+    elseif enemy.typeName == "runner" then
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, enemy.x - size * 0.4, enemy.y + size * 0.15)
+        nvgLineTo(nvg, enemy.x + size * 0.5, enemy.y - size * 0.2)
+        nvgMoveTo(nvg, enemy.x - size * 0.35, enemy.y + size * 0.35)
+        nvgLineTo(nvg, enemy.x + size * 0.55, enemy.y)
+        nvgStroke(nvg)
+    elseif enemy.typeName == "brute" then
+        nvgBeginPath(nvg)
+        nvgRect(nvg, enemy.x - size * 0.4, enemy.y - size * 0.15, size * 0.8, size * 0.45)
+        nvgStroke(nvg)
+    elseif enemy.typeName == "archer" then
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, enemy.x - size * 0.35, enemy.y + size * 0.35)
+        nvgLineTo(nvg, enemy.x + size * 0.3, enemy.y - size * 0.25)
+        nvgMoveTo(nvg, enemy.x + size * 0.05, enemy.y - size * 0.2)
+        nvgLineTo(nvg, enemy.x + size * 0.2, enemy.y + size * 0.25)
+        nvgStroke(nvg)
+    elseif enemy.typeName == "boss" then
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, enemy.x - size * 0.5, enemy.y - size * 0.6)
+        nvgLineTo(nvg, enemy.x - size * 0.2, enemy.y - size * 0.2)
+        nvgLineTo(nvg, enemy.x, enemy.y - size * 0.55)
+        nvgLineTo(nvg, enemy.x + size * 0.2, enemy.y - size * 0.2)
+        nvgLineTo(nvg, enemy.x + size * 0.5, enemy.y - size * 0.6)
+        nvgStroke(nvg)
+    end
+
+    nvgFillColor(nvg, nvgRGBA(255, 245, 235, 230))
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, enemy.x - size * 0.22, enemy.y - size * 0.15, math.max(2, size * 0.12))
+    nvgCircle(nvg, enemy.x + size * 0.22, enemy.y - size * 0.15, math.max(2, size * 0.12))
+    nvgFill(nvg)
+
+    nvgFillColor(nvg, nvgRGBA(30, 30, 30, 255))
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, enemy.x - size * 0.22, enemy.y - size * 0.15, math.max(1, size * 0.05))
+    nvgCircle(nvg, enemy.x + size * 0.22, enemy.y - size * 0.15, math.max(1, size * 0.05))
     nvgFill(nvg)
 
     local hpRatio = enemy.hp / enemy.maxHP
@@ -168,9 +222,10 @@ function Enemy.Draw(nvg, enemy)
     nvgRect(nvg, enemy.x - barW/2, enemy.y - size - 12, barW, 6)
     nvgFill(nvg)
     
-    nvgFillColor(nvg, hpRatio > 0.5 and 80 or (hpRatio > 0.25 and 220 or 220),
-                    hpRatio > 0.5 and 200 or (hpRatio > 0.25 and 180 or 50),
-                    hpRatio > 0.5 and 80 or (hpRatio > 0.25 and 40 or 50), 255)
+    nvgFillColor(nvg, nvgRGBA(
+        hpRatio > 0.5 and 80 or (hpRatio > 0.25 and 220 or 220),
+        hpRatio > 0.5 and 200 or (hpRatio > 0.25 and 180 or 50),
+        hpRatio > 0.5 and 80 or (hpRatio > 0.25 and 40 or 50), 255))
     nvgBeginPath(nvg)
     nvgRect(nvg, enemy.x - barW/2, enemy.y - size - 12, barW * hpRatio, 6)
     nvgFill(nvg)

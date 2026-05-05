@@ -67,7 +67,7 @@ end
 
 function Path.Draw(nvg)
     for _, route in ipairs(Path.routes) do
-        nvgStrokeColor(nvg, nvgRGBA(100, 80, 60, 200))
+        nvgStrokeColor(nvg, nvgRGBA(130, 110, 90, 210))
         nvgBeginPath(nvg)
         nvgMoveTo(nvg, route[1].x, route[1].y)
         for i = 2, #route do
@@ -76,7 +76,7 @@ function Path.Draw(nvg)
         nvgStrokeWidth(nvg, 40)
         nvgStroke(nvg)
         
-        nvgStrokeColor(nvg, nvgRGBA(80, 60, 40, 255))
+        nvgStrokeColor(nvg, nvgRGBA(100, 80, 60, 255))
         nvgBeginPath(nvg)
         nvgMoveTo(nvg, route[1].x, route[1].y)
         for i = 2, #route do

@@ -1,6 +1,12 @@
 
 local Equipment = {}
 
+Equipment.progression = {
+    weapon = { "iron_sword", "steel_sword", "flame_blade" },
+    armor = { "leather_armor", "chain_mail", "dragon_armor" },
+    accessory = { "speed_boots", "mana_ring", "life_steal" },
+}
+
 Equipment.items = {
     iron_sword = {
         name = "铁剑", type = "weapon", slot = "weapon",
@@ -58,6 +64,29 @@ end
 function Equipment.Unequip(slot)
     Hero.state.equipment[slot] = nil
     Hero.RecalcStats()
+end
+
+function Equipment.GetNextItem(slot)
+    local order = Equipment.progression[slot]
+    if not order then return nil end
+    local equipped = Hero.state.equipment[slot]
+    if not equipped then
+        return order[1]
+    end
+    for i, itemId in ipairs(order) do
+        if itemId == equipped then
+            return order[i + 1]
+        end
+    end
+    return nil
+end
+
+function Equipment.BuyNext(slot, gold)
+    local itemId = Equipment.GetNextItem(slot)
+    if not itemId then return false, gold, nil end
+    local ok
+    ok, gold = Equipment.Equip(itemId, gold)
+    return ok, gold, itemId
 end
 
 return Equipment
