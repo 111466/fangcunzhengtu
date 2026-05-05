@@ -40,8 +40,8 @@ function Path.GetRouteLength(route)
 end
 
 function Path.GetPosition(route, progress)
-    if progress &lt;= 0 then return route[1].x, route[1].y end
-    if progress &gt;= 1 then
+    if progress <= 0 then return route[1].x, route[1].y end
+    if progress >= 1 then
         local last = route[#route]
         return last.x, last.y
     end
@@ -52,7 +52,7 @@ function Path.GetPosition(route, progress)
         local dx = route[i].x - route[i-1].x
         local dy = route[i].y - route[i-1].y
         local segLen = math.sqrt(dx*dx + dy*dy)
-        if accumulated + segLen &gt;= targetDist then
+        if accumulated + segLen >= targetDist then
             local t = (targetDist - accumulated) / segLen
             return route[i-1].x + dx * t, route[i-1].y + dy * t
         end
@@ -67,7 +67,7 @@ end
 
 function Path.Draw(nvg)
     for _, route in ipairs(Path.routes) do
-        nvgStrokeColor(nvg, 100, 80, 60, 200)
+        nvgStrokeColor(nvg, nvgRGBA(100, 80, 60, 200))
         nvgBeginPath(nvg)
         nvgMoveTo(nvg, route[1].x, route[1].y)
         for i = 2, #route do
@@ -76,7 +76,7 @@ function Path.Draw(nvg)
         nvgStrokeWidth(nvg, 40)
         nvgStroke(nvg)
         
-        nvgStrokeColor(nvg, 80, 60, 40, 255)
+        nvgStrokeColor(nvg, nvgRGBA(80, 60, 40, 255))
         nvgBeginPath(nvg)
         nvgMoveTo(nvg, route[1].x, route[1].y)
         for i = 2, #route do

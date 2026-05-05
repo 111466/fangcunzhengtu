@@ -28,7 +28,7 @@ function Projectile.UpdateAll(dt)
             local dy = p.target.y - p.y
             local dist = math.sqrt(dx*dx + dy*dy)
 
-            if dist &lt; 12 then
+            if dist < 12 then
                 if p.target.config then
                     Enemy.Damage(p.target, p.damage)
                     if p.slow then
@@ -39,12 +39,12 @@ function Projectile.UpdateAll(dt)
                     Hero.TakeDamage(p.damage)
                 end
 
-                if p.splash &gt; 0 then
+                if p.splash > 0 then
                     for _, enemy in ipairs(Enemy.list) do
                         if enemy ~= p.target and enemy.alive then
                             local sdx = enemy.x - p.target.x
                             local sdy = enemy.y - p.target.y
-                            if math.sqrt(sdx*sdx + sdy*sdy) &lt; p.splash then
+                            if math.sqrt(sdx*sdx + sdy*sdy) < p.splash then
                                 Enemy.Damage(enemy, p.damage * 0.5)
                             end
                         end

@@ -13,16 +13,16 @@ function InputController.HandleKeyboard(dt)
     s.moveX = 0
     s.moveY = 0
 
-    if input.GetKeyDown(input.KEY_A) or input.GetKeyDown(input.KEY_LEFT) then
+    if input:GetKeyDown(KEY_A) or input:GetKeyDown(KEY_LEFT) then
         s.moveX = s.moveX - 1
     end
-    if input.GetKeyDown(input.KEY_D) or input.GetKeyDown(input.KEY_RIGHT) then
+    if input:GetKeyDown(KEY_D) or input:GetKeyDown(KEY_RIGHT) then
         s.moveX = s.moveX + 1
     end
-    if input.GetKeyDown(input.KEY_W) or input.GetKeyDown(input.KEY_UP) then
+    if input:GetKeyDown(KEY_W) or input:GetKeyDown(KEY_UP) then
         s.moveY = s.moveY - 1
     end
-    if input.GetKeyDown(input.KEY_S) or input.GetKeyDown(input.KEY_DOWN) then
+    if input:GetKeyDown(KEY_S) or input:GetKeyDown(KEY_DOWN) then
         s.moveY = s.moveY + 1
     end
 
@@ -32,24 +32,24 @@ function InputController.HandleKeyboard(dt)
         s.moveY = s.moveY / len
     end
 
-    s.attacking = input.GetKeyDown(input.KEY_SPACE) or input.GetMouseButtonDown(input.MOUSEB_LEFT)
+    s.attacking = input:GetKeyDown(KEY_SPACE) or input:GetMouseButtonDown(MOUSEB_LEFT)
 
-    if input.GetKeyPress(input.KEY_1) then
+    if input:GetKeyPress(KEY_1) then
         Skills.Cast(1, Hero.state.x, Hero.state.y, Enemy.list, Tower.list)
     end
-    if input.GetKeyPress(input.KEY_2) then
+    if input:GetKeyPress(KEY_2) then
         Skills.Cast(2, Hero.state.x, Hero.state.y, Enemy.list, Tower.list)
     end
-    if input.GetKeyPress(input.KEY_3) then
+    if input:GetKeyPress(KEY_3) then
         Skills.Cast(3, Hero.state.x, Hero.state.y, Enemy.list, Tower.list)
     end
-    if input.GetKeyPress(input.KEY_4) then
-        local mx, my = input.GetMousePosition()
+    if input:GetKeyPress(KEY_4) then
+        local mx, my = input:GetMousePosition()
         Skills.Cast(4, mx, my, Enemy.list, Tower.list)
     end
 
-    if input.GetMouseButtonDown(input.MOUSEB_RIGHT) then
-        local mx, my = input.GetMousePosition()
+    if input:GetMouseButtonDown(MOUSEB_RIGHT) then
+        local mx, my = input:GetMousePosition()
         if InputController.state.placingTower then
             return InputController.state.placingTower, mx, my
         end

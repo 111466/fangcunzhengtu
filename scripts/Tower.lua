@@ -30,7 +30,7 @@ Tower.types = {
 
 function Tower.Create(typeName, x, y, gold)
     local config = Tower.types[typeName]
-    if not config or gold &lt; config.cost then return nil, gold end
+    if not config or gold < config.cost then return nil, gold end
     gold = gold - config.cost
     local tower = {
         type = typeName, config = config,
@@ -53,7 +53,7 @@ end
 function Tower.Update(tower, dt)
     tower.cooldown = tower.cooldown - dt
 
-    if tower._warCryTimer &gt; 0 then
+    if tower._warCryTimer > 0 then
         tower._warCryTimer = tower._warCryTimer - dt
     else
         tower._warCryATK = 0
@@ -66,14 +66,14 @@ function Tower.Update(tower, dt)
             local dx = enemy.x - tower.x
             local dy = enemy.y - tower.y
             local dist = math.sqrt(dx*dx + dy*dy)
-            if dist &lt; closestDist then
+            if dist < closestDist then
                 closestDist = dist
                 closest = enemy
             end
         end
     end
 
-    if closest and tower.cooldown &lt;= 0 then
+    if closest and tower.cooldown <= 0 then
         tower.cooldown = 1.0 / tower.config.fireRate
         local dmg = tower.damage * (1 + tower._warCryATK)
 
@@ -115,7 +115,7 @@ function Tower.ChainLightning(tower, firstTarget, damage)
                     local dx = enemy.x - current.x
                     local dy = enemy.y - current.y
                     local dist = math.sqrt(dx*dx + dy*dy)
-                    if dist &lt; nextDist then
+                    if dist < nextDist then
                         nextDist = dist
                         nextTarget = enemy
                     end
@@ -137,7 +137,7 @@ end
 
 function Tower.Upgrade(tower, gold)
     local cost = tower.config.cost * tower.level
-    if gold &lt; cost or tower.level &gt;= 3 then return false, gold end
+    if gold < cost or tower.level >= 3 then return false, gold end
     gold = gold - cost
     tower.level = tower.level + 1
     tower.damage = math.floor(tower.damage * 1.4)
@@ -154,7 +154,7 @@ end
 function Tower.Draw(nvg, tower)
     local c = tower.config.color
     
-    nvgFillColor(nvg, 60, 60, 60, 255)
+    nvgFillColor(nvg, nvgRGBA(60, 60, 60, 255))
     nvgBeginPath(nvg)
     nvgCircle(nvg, tower.x, tower.y, c.size + 6)
     nvgFill(nvg)
@@ -164,7 +164,7 @@ function Tower.Draw(nvg, tower)
     nvgCircle(nvg, tower.x, tower.y, c.size)
     nvgFill(nvg)
 
-    nvgFillColor(nvg, 255, 255, 255, 255)
+    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
     nvgFontSize(nvg, 10)
     nvgTextAlign(nvg, 1)
     nvgText(nvg, tower.x, tower.y + 4, "Lv" .. tower.level)

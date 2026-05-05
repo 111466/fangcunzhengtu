@@ -36,6 +36,7 @@ Hero.state = {
     skills = {},
     skillSlots = { nil, nil, nil, nil },
     equipment = {},
+    attackCooldown = 0,
 }
 
 function Hero.Init()
@@ -50,6 +51,7 @@ function Hero.Init()
     s.invincibleTimer = 0
     s.vx = 0
     s.vy = 0
+    s.attackCooldown = 0
     s.animState = "idle"
     s.bonusATK = 0
     s.bonusDEF = 0
@@ -61,13 +63,13 @@ function Hero.Update(dt)
     local s = Hero.state
     if not s.alive then return end
 
-    if s.invincibleTimer &gt; 0 then
+    if s.invincibleTimer > 0 then
         s.invincibleTimer = s.invincibleTimer - dt
     end
 
-    if s._warCryTimer and s._warCryTimer &gt; 0 then
+    if s._warCryTimer and s._warCryTimer > 0 then
         s._warCryTimer = s._warCryTimer - dt
-        if s._warCryTimer &lt;= 0 then
+        if s._warCryTimer <= 0 then
             s._warCryATK = 0
             s._warCryDEF = 0
         end
@@ -78,7 +80,7 @@ function Hero.Update(dt)
     s.attackCooldown = s.attackCooldown - dt
 
     s.animTimer = s.animTimer - dt
-    if s.animTimer &lt;= 0 and s.animState ~= "idle" and s.animState ~= "run" then
+    if s.animTimer <= 0 and s.animState ~= "idle" and s.animState ~= "run" then
         s.animState = "idle"
     end
 
@@ -89,10 +91,10 @@ function Hero.Update(dt)
     s.x = math.max(20, math.min(s.x, 1430))
     s.y = math.max(20, math.min(s.y, 700))
 
-    if math.abs(s.vx) &gt; 0.01 or math.abs(s.vy) &gt; 0.01 then
+    if math.abs(s.vx) > 0.01 or math.abs(s.vy) > 0.01 then
         s.animState = "run"
-        if s.vx &gt; 0.1 then s.facing = 1
-        elseif s.vx &lt; -0.1 then s.facing = -1
+        if s.vx > 0.1 then s.facing = 1
+        elseif s.vx < -0.1 then s.facing = -1
         end
     elseif s.animState == "run" then
         s.animState = "idle"
@@ -101,7 +103,7 @@ end
 
 function Hero.Attack(enemies)
     local s = Hero.state
-    if s.attackCooldown &gt; 0 then return end
+    if s.attackCooldown > 0 then return end
 
     local baseATK = Hero.config.baseATK + s.bonusATK
     local totalATK = math.floor(baseATK * (1 + (s._warCryATK or 0)))
@@ -113,7 +115,7 @@ function Hero.Attack(enemies)
             local dx = enemy.x - s.x
             local dy = enemy.y - s.y
             local dist = math.sqrt(dx*dx + dy*dy)
-            if dist &lt; closestDist then
+            if dist < closestDist then
                 closestDist = dist
                 closest = enemy
             end
@@ -127,7 +129,7 @@ function Hero.Attack(enemies)
         s.animTimer = 0.25
         s.totalDamage = s.totalDamage + totalATK
 
-        if closest.x &gt; s.x then s.facing = 1
+        if closest.x > s.x then s.facing = 1
         else s.facing = -1 end
 
         if Particle then
@@ -138,7 +140,7 @@ end
 
 function Hero.TakeDamage(amount)
     local s = Hero.state
-    if not s.alive or s.invincibleTimer &gt; 0 then return end
+    if not s.alive or s.invincibleTimer > 0 then return end
 
     local baseDEF = Hero.config.baseDEF + s.bonusDEF
     local totalDEF = math.floor(baseDEF * (1 + (s._warCryDEF or 0)))
@@ -154,7 +156,7 @@ function Hero.TakeDamage(amount)
         Particle.Spawn("hit", s.x, s.y - 10, 0)
     end
 
-    if s.hp &lt;= 0 then
+    if s.hp <= 0 then
         s.hp = 0
         s.alive = false
         s.animState = "die"
@@ -196,27 +198,27 @@ function Hero.Draw(nvg)
     local s = Hero.state
     if not s.alive then return end
 
-    local flash = s.invincibleTimer &gt; 0 and math.floor(s.invincibleTimer * 10) % 2 == 0
+    local flash = s.invincibleTimer > 0 and math.floor(s.invincibleTimer * 10) % 2 == 0
 
     nvgSave(nvg)
     nvgTranslate(nvg, s.x, s.y)
 
-    nvgFillColor(nvg, 50, 100, 200, flash and 150 or 255)
+    nvgFillColor(nvg, nvgRGBA(50, 100, 200, flash and 150 or 255))
     nvgBeginPath(nvg)
     nvgCircle(nvg, 0, 0, Hero.config.size)
     nvgFill(nvg)
 
-    nvgFillColor(nvg, 200, 200, 200, flash and 150 or 255)
+    nvgFillColor(nvg, nvgRGBA(200, 200, 200, flash and 150 or 255))
     nvgBeginPath(nvg)
     nvgCircle(nvg, 0, -10, 12)
     nvgFill(nvg)
 
-    nvgFillColor(nvg, 30, 30, 30, 255)
+    nvgFillColor(nvg, nvgRGBA(30, 30, 30, 255))
     nvgBeginPath(nvg)
     nvgCircle(nvg, s.facing * 4, -12, 3)
     nvgFill(nvg)
 
-    nvgStrokeColor(nvg, 150, 100, 50, 255)
+    nvgStrokeColor(nvg, nvgRGBA(150, 100, 50, 255))
     nvgBeginPath(nvg)
     nvgMoveTo(nvg, s.facing * 25, -5)
     nvgLineTo(nvg, s.facing * 45, -15)

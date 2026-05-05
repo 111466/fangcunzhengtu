@@ -34,7 +34,7 @@ function Particle.UpdateAll(dt)
     for i = #Particle.list, 1, -1 do
         local p = Particle.list[i]
         p.life = p.life - dt
-        if p.life &lt;= 0 then
+        if p.life <= 0 then
             table.remove(Particle.list, i)
         end
     end

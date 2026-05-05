@@ -76,14 +76,14 @@ function WaveManager.Update(dt, gold)
 
     if not WaveManager.waveActive then
         WaveManager.prepTimer = WaveManager.prepTimer - dt
-        if WaveManager.prepTimer &lt;= 0 then
+        if WaveManager.prepTimer <= 0 then
             WaveManager.StartNextWave()
         end
         return gold
     end
 
     WaveManager.spawnTimer = WaveManager.spawnTimer - dt
-    if WaveManager.spawnTimer &lt;= 0 and #WaveManager.spawnQueue &gt; 0 then
+    if WaveManager.spawnTimer <= 0 and #WaveManager.spawnQueue > 0 then
         local next = table.remove(WaveManager.spawnQueue, 1)
         local route
         if next.route == "random" then

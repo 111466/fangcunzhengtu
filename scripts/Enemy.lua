@@ -66,21 +66,21 @@ function Enemy.UpdateAll(dt, heroState)
 end
 
 function Enemy.Update(enemy, dt, heroState)
-    if enemy._slowTimer &gt; 0 then
+    if enemy._slowTimer > 0 then
         enemy._slowTimer = enemy._slowTimer - dt
     else
         enemy._slowFactor = 1.0
     end
 
-    if enemy.stunTimer &gt; 0 then
+    if enemy.stunTimer > 0 then
         enemy.stunTimer = enemy.stunTimer - dt
         return
     end
 
-    if enemy.burnTimer &gt; 0 then
+    if enemy.burnTimer > 0 then
         enemy.burnTimer = enemy.burnTimer - dt
         enemy.hp = enemy.hp - enemy.burnDamage * dt
-        if enemy.hp &lt;= 0 then
+        if enemy.hp <= 0 then
             enemy.alive = false
             if Particle then
                 Particle.Spawn("death", enemy.x, enemy.y, 0)
@@ -95,9 +95,9 @@ function Enemy.Update(enemy, dt, heroState)
         local dx = heroState.x - enemy.x
         local dy = heroState.y - enemy.y
         local dist = math.sqrt(dx*dx + dy*dy)
-        if dist &lt; enemy.config.attackRange then
+        if dist < enemy.config.attackRange then
             enemy.attackCooldown = enemy.attackCooldown - dt
-            if enemy.attackCooldown &lt;= 0 then
+            if enemy.attackCooldown <= 0 then
                 enemy.attackCooldown = 1.0 / enemy.config.attackSpeed
                 if Projectile then
                     Projectile.Create(enemy.x, enemy.y, heroState,
@@ -117,7 +117,7 @@ function Enemy.Update(enemy, dt, heroState)
         local dx = heroState.x - enemy.x
         local dy = heroState.y - enemy.y
         local dist = math.sqrt(dx*dx + dy*dy)
-        if dist &lt; (Hero.config.size + enemy.config.size) * 0.5 then
+        if dist < (Hero.config.size + enemy.config.size) * 0.5 then
             Hero.TakeDamage(enemy.config.damage * 0.5)
         end
     end
@@ -134,7 +134,7 @@ function Enemy.Damage(enemy, amount)
     if Particle then
         Particle.Spawn("hit", enemy.x, enemy.y - 5, 0)
     end
-    if enemy.hp &lt;= 0 then
+    if enemy.hp <= 0 then
         enemy.alive = false
         if Particle then
             Particle.Spawn("death", enemy.x, enemy.y, 0)
@@ -163,20 +163,20 @@ function Enemy.Draw(nvg, enemy)
 
     local hpRatio = enemy.hp / enemy.maxHP
     local barW = size * 2
-    nvgFillColor(nvg, 40, 40, 40, 200)
+    nvgFillColor(nvg, nvgRGBA(40, 40, 40, 200))
     nvgBeginPath(nvg)
     nvgRect(nvg, enemy.x - barW/2, enemy.y - size - 12, barW, 6)
     nvgFill(nvg)
     
-    nvgFillColor(nvg, hpRatio &gt; 0.5 and 80 or (hpRatio &gt; 0.25 and 220 or 220),
-                    hpRatio &gt; 0.5 and 200 or (hpRatio &gt; 0.25 and 180 or 50),
-                    hpRatio &gt; 0.5 and 80 or (hpRatio &gt; 0.25 and 40 or 50), 255)
+    nvgFillColor(nvg, hpRatio > 0.5 and 80 or (hpRatio > 0.25 and 220 or 220),
+                    hpRatio > 0.5 and 200 or (hpRatio > 0.25 and 180 or 50),
+                    hpRatio > 0.5 and 80 or (hpRatio > 0.25 and 40 or 50), 255)
     nvgBeginPath(nvg)
     nvgRect(nvg, enemy.x - barW/2, enemy.y - size - 12, barW * hpRatio, 6)
     nvgFill(nvg)
 
-    if enemy.burnTimer &gt; 0 then
-        nvgFillColor(nvg, 255, 150, 50, 150)
+    if enemy.burnTimer > 0 then
+        nvgFillColor(nvg, nvgRGBA(255, 150, 50, 150))
         nvgBeginPath(nvg)
         nvgCircle(nvg, enemy.x, enemy.y - size - 20, 5)
         nvgFill(nvg)

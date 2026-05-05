@@ -88,7 +88,7 @@ Skills.slots = {
 
 function Skills.Update(dt)
     for i, slot in ipairs(Skills.slots) do
-        if slot.level &gt; 0 and slot.cooldownTimer &gt; 0 then
+        if slot.level > 0 and slot.cooldownTimer > 0 then
             slot.cooldownTimer = slot.cooldownTimer - dt
         end
     end
@@ -96,11 +96,11 @@ end
 
 function Skills.Cast(slotIndex, targetX, targetY, enemies, towers)
     local slot = Skills.slots[slotIndex]
-    if not slot or slot.level &lt;= 0 then return false end
-    if slot.cooldownTimer &gt; 0 then return false end
+    if not slot or slot.level <= 0 then return false end
+    if slot.cooldownTimer > 0 then return false end
 
     local def = Skills.definitions[slot.id]
-    if Hero.state.mana &lt; def.manaCost then return false end
+    if Hero.state.mana < def.manaCost then return false end
 
     Hero.state.mana = Hero.state.mana - def.manaCost
     slot.cooldownTimer = def.cooldown
@@ -133,10 +133,10 @@ function Skills.Whirlwind(heroATK, def, level, enemies)
             local dx = enemy.x - Hero.state.x
             local dy = enemy.y - Hero.state.y
             local dist = math.sqrt(dx*dx + dy*dy)
-            if dist &lt; range then
+            if dist < range then
                 Enemy.Damage(enemy, damage)
                 Hero.state.totalDamage = Hero.state.totalDamage + damage
-                if knockback &gt; 0 and dist &gt; 0 then
+                if knockback > 0 and dist > 0 then
                     enemy.x = enemy.x + (dx / dist) * knockback
                     enemy.y = enemy.y + (dy / dist) * knockback
                 end
@@ -164,11 +164,11 @@ function Skills.Charge(heroATK, def, level, enemies)
         if enemy.alive then
             local minX = math.min(startX, Hero.state.x) - 30
             local maxX = math.max(startX, Hero.state.x) + 30
-            if enemy.x &gt;= minX and enemy.x &lt;= maxX
-                and math.abs(enemy.y - Hero.state.y) &lt; 40 then
+            if enemy.x >= minX and enemy.x <= maxX
+                and math.abs(enemy.y - Hero.state.y) < 40 then
                 Enemy.Damage(enemy, damage)
                 Hero.state.totalDamage = Hero.state.totalDamage + damage
-                if stun &gt; 0 then
+                if stun > 0 then
                     enemy.stunTimer = stun
                 end
             end
@@ -214,7 +214,7 @@ function Skills.Meteor(heroATK, def, level, targetX, targetY, enemies)
             local dx = enemy.x - targetX
             local dy = enemy.y - targetY
             local dist = math.sqrt(dx*dx + dy*dy)
-            if dist &lt; radius then
+            if dist < radius then
                 Enemy.Damage(enemy, damage)
                 Hero.state.totalDamage = Hero.state.totalDamage + damage
                 if burn then
@@ -234,9 +234,9 @@ function Skills.Upgrade(slotIndex, gold)
     local slot = Skills.slots[slotIndex]
     if not slot then return false, gold end
     local def = Skills.definitions[slot.id]
-    if slot.level &gt;= def.maxLevel then return false, gold end
+    if slot.level >= def.maxLevel then return false, gold end
     local cost = 50 + slot.level * 30
-    if gold &lt; cost then return false, gold end
+    if gold < cost then return false, gold end
     gold = gold - cost
     slot.level = slot.level + 1
     return true, gold

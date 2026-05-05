@@ -47,7 +47,7 @@ Equipment.items = {
 function Equipment.Equip(itemId, gold)
     local item = Equipment.items[itemId]
     if not item then return false, gold end
-    if gold &lt; item.price then return false, gold end
+    if gold < item.price then return false, gold end
 
     gold = gold - item.price
     Hero.state.equipment[item.slot] = itemId

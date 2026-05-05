@@ -1,17 +1,17 @@
 
-local Config = require("scripts.Config")
-local Utils = require("scripts.Utils")
-local Path = require("scripts.Path")
-local Hero = require("scripts.Hero")
-local Skills = require("scripts.Skills")
-local Equipment = require("scripts.Equipment")
-local Enemy = require("scripts.Enemy")
-local Tower = require("scripts.Tower")
-local Projectile = require("scripts.Projectile")
-local WaveManager = require("scripts.WaveManager")
-local InputController = require("scripts.InputController")
-local Particle = require("scripts.Particle")
-local UI = require("scripts.UI")
+Config = require("scripts.Config")
+Utils = require("scripts.Utils")
+Path = require("scripts.Path")
+Particle = require("scripts.Particle")
+Hero = require("scripts.Hero")
+Skills = require("scripts.Skills")
+Equipment = require("scripts.Equipment")
+Enemy = require("scripts.Enemy")
+Tower = require("scripts.Tower")
+Projectile = require("scripts.Projectile")
+WaveManager = require("scripts.WaveManager")
+InputController = require("scripts.InputController")
+UI = require("scripts.UI")
 
 local gold_ = Config.INITIAL_GOLD
 local lives_ = Config.INITIAL_LIVES
@@ -28,6 +28,7 @@ function Start()
     WaveManager.Init()
 
     SubscribeToEvent("Update", "HandleUpdate")
+    SubscribeToEvent(nvg_, "NanoVGRender", "HandleNanoVGRender")
     print("[Game] Started!")
 end
 
@@ -80,29 +81,36 @@ function HandleUpdate(eventType, eventData)
     gold_ = WaveManager.Update(dt, gold_)
     Particle.UpdateAll(dt)
 
-    if lives_ &lt;= 0 then
+    if lives_ <= 0 then
         lives_ = 0
     end
 
-    if nvg_ then
-        nvgBeginFrame(nvg_, screenWidth, screenHeight, 1.0)
+end
 
-        nvgFillColor(nvg_, 30, 40, 30, 255)
-        nvgBeginPath(nvg_)
-        nvgRect(nvg_, 0, 0, screenWidth, screenHeight)
-        nvgFill(nvg_)
+function HandleNanoVGRender(eventType, eventData)
+    if not nvg_ then return end
 
-        Path.Draw(nvg_)
-        Tower.DrawAll(nvg_)
-        Enemy.DrawAll(nvg_)
-        Hero.Draw(nvg_)
-        Projectile.DrawAll(nvg_)
-        Particle.DrawAll(nvg_)
-        UI.Render(nvg_, "battle", gold_, lives_,
-                  WaveManager.currentWave, Hero.state, screenWidth, screenHeight)
+    local dpr = graphics:GetDPR()
+    local screenWidth = graphics:GetWidth() / dpr
+    local screenHeight = graphics:GetHeight() / dpr
 
-        nvgEndFrame(nvg_)
-    end
+    nvgBeginFrame(nvg_, screenWidth, screenHeight, dpr)
+
+    nvgBeginPath(nvg_)
+    nvgRect(nvg_, 0, 0, screenWidth, screenHeight)
+    nvgFillColor(nvg_, nvgRGBA(30, 40, 30, 255))
+    nvgFill(nvg_)
+
+    Path.Draw(nvg_)
+    Tower.DrawAll(nvg_)
+    Enemy.DrawAll(nvg_)
+    Hero.Draw(nvg_)
+    Projectile.DrawAll(nvg_)
+    Particle.DrawAll(nvg_)
+    UI.Render(nvg_, "battle", gold_, lives_,
+              WaveManager.currentWave, Hero.state, screenWidth, screenHeight)
+
+    nvgEndFrame(nvg_)
 end
 
 function Stop()
