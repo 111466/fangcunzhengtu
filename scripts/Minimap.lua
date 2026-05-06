@@ -6,6 +6,8 @@ local Minimap = {}
 
 -- 状态
 local expanded_ = false
+local isMobile_ = false
+local dragging_ = false  -- 正在拖拽小地图（按住未松开）
 
 -- 折叠尺寸 / 展开尺寸
 local COLLAPSED_W = 200
@@ -13,13 +15,20 @@ local COLLAPSED_H = 150
 local EXPANDED_W  = 600
 local EXPANDED_H  = 450
 
+-- 移动端折叠尺寸（一半）
+local COLLAPSED_W_MOBILE = 100
+local COLLAPSED_H_MOBILE = 75
+
 -- 右上角边距
 local MARGIN = 12
 
 --- 初始化小地图
-function Minimap.Init()
+---@param isMobile boolean|nil
+function Minimap.Init(isMobile)
     expanded_ = false
-    print("[Minimap] Initialized")
+    dragging_ = false
+    isMobile_ = isMobile or false
+    print("[Minimap] Initialized, mobile=" .. tostring(isMobile_))
 end
 
 --- 是否已展开
@@ -42,7 +51,9 @@ local function GetRect(screenW, screenH)
         local y = (screenH - EXPANDED_H) / 2
         return x, y, EXPANDED_W, EXPANDED_H
     else
-        return screenW - COLLAPSED_W - MARGIN, MARGIN, COLLAPSED_W, COLLAPSED_H
+        local cw = isMobile_ and COLLAPSED_W_MOBILE or COLLAPSED_W
+        local ch = isMobile_ and COLLAPSED_H_MOBILE or COLLAPSED_H
+        return screenW - cw - MARGIN, MARGIN, cw, ch
     end
 end
 
@@ -81,14 +92,43 @@ function Minimap.HandleClick(mx, my, screenW, screenH)
         return true
     end
 
-    -- 展开状态 → 点击跳转相机
+    -- 展开状态 → 点击跳转相机，进入拖拽模式
     local relX = (mx - rx) / rw  -- 0~1
     local relY = (my - ry) / rh  -- 0~1
     local worldX = relX * Config.WORLD_WIDTH
     local worldY = relY * Config.WORLD_HEIGHT
     Camera.JumpTo(worldX, worldY)
-    expanded_ = false
+    Camera.PauseFollow()
+    dragging_ = true
     return true
+end
+
+--- 处理拖拽移动（鼠标/触摸按住移动时调用）
+---@param mx number 屏幕鼠标 X
+---@param my number 屏幕鼠标 Y
+---@param screenW number
+---@param screenH number
+function Minimap.HandleDrag(mx, my, screenW, screenH)
+    if not dragging_ or not expanded_ then return end
+    local rx, ry, rw, rh = GetRect(screenW, screenH)
+    local relX = math.max(0, math.min(1, (mx - rx) / rw))
+    local relY = math.max(0, math.min(1, (my - ry) / rh))
+    local worldX = relX * Config.WORLD_WIDTH
+    local worldY = relY * Config.WORLD_HEIGHT
+    Camera.JumpTo(worldX, worldY)
+end
+
+--- 处理松开（鼠标/触摸松开时调用）
+function Minimap.HandleRelease()
+    if not dragging_ then return end
+    dragging_ = false
+    expanded_ = false
+    Camera.ResumeFollow()
+end
+
+--- 是否正在拖拽
+function Minimap.IsDragging()
+    return dragging_
 end
 
 --- 绘制小地图（屏幕空间，不受相机偏移影响）
@@ -135,28 +175,7 @@ function Minimap.Draw(nvg, screenW, screenH, heroState)
         nvgStroke(nvg)
     end
 
-    -- 3. 营地标记
-    local campPos = Map.GetCampPos()
-    local cx = rx + campPos.x * scaleX
-    local cy = ry + campPos.y * scaleY
-    local cr = expanded_ and 5 or 3
-    nvgBeginPath(nvg)
-    nvgCircle(nvg, cx, cy, cr)
-    nvgFillColor(nvg, nvgRGBA(220, 160, 50, 240))
-    nvgFill(nvg)
-    nvgStrokeColor(nvg, nvgRGBA(255, 255, 255, 180))
-    nvgStrokeWidth(nvg, 1)
-    nvgBeginPath(nvg)
-    nvgCircle(nvg, cx, cy, cr)
-    nvgStroke(nvg)
-    if expanded_ then
-        nvgFontSize(nvg, 11)
-        nvgTextAlign(nvg, 1) -- NVG_ALIGN_CENTER
-        nvgFillColor(nvg, nvgRGBA(255, 255, 255, 200))
-        nvgText(nvg, cx, cy + cr + 10, "民房")
-    end
-
-    -- 4. 防御塔位置（如果有）
+    -- 3. 防御塔位置（如果有）
     if Tower and Tower.list then
         for _, tower in ipairs(Tower.list) do
             local tx = rx + tower.x * scaleX
@@ -197,12 +216,12 @@ function Minimap.Draw(nvg, screenW, screenH, heroState)
     -- 9. 标题
     if not expanded_ then
         nvgFontSize(nvg, 11)
-        nvgTextAlign(nvg, 1)
+        nvgTextAlign(nvg, 2) -- NVG_ALIGN_CENTER
         nvgFillColor(nvg, nvgRGBA(255, 255, 255, 160))
         nvgText(nvg, rx + rw / 2, ry + rh - 6, "点击展开")
     else
         nvgFontSize(nvg, 14)
-        nvgTextAlign(nvg, 1)
+        nvgTextAlign(nvg, 2) -- NVG_ALIGN_CENTER
         nvgFillColor(nvg, nvgRGBA(255, 255, 255, 200))
         nvgText(nvg, rx + rw / 2, ry - 6, "世界地图 (点击跳转)")
     end

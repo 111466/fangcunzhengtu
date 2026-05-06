@@ -117,8 +117,8 @@ local function GenerateDecorations()
 
                 -- 避开边界
                 if x > 30 and x < WORLD_W - 30 and y > 30 and y < WORLD_H - 30 then
-                    -- 避开道路和地标
-                    if not IsNearCamp(x, y, 120) then
+                    -- 避开道路和地标（城堡较大，扩大避让范围）
+                    if not IsNearCamp(x, y, 180) then
                         local biome = GetBiome(x, y)
                         local typeRand
                         seed, typeRand = PseudoRandom(seed)
@@ -171,6 +171,7 @@ function Map.Init(nvg)
     -- 加载营地建筑图片
     images_.camp = nvgCreateImage(nvg, "image/house_building.png", 0)
     images_.warehouse = nvgCreateImage(nvg, "image/warehouse_building.png", 0)
+    images_.castle = nvgCreateImage(nvg, "image/castle.png", 0)
 
     -- 加载动画树精灵图
     for name, meta in pairs(treeMeta_) do
@@ -335,6 +336,25 @@ local function DrawCamp(nvg)
     nvgFill(nvg)
 end
 
+--- 绘制城堡建筑精灵（领地中心）
+local function DrawCastle(nvg)
+    local img = images_.castle
+    if not img or img <= 0 then return end
+    if not Camera.IsVisible(campPos_.x, campPos_.y, 250) then return end
+
+    -- 城堡原始 320x256，绘制尺寸保持比例，适当大小
+    local drawW = 200
+    local drawH = 160  -- 200 * (256/320)
+    local destX = campPos_.x - drawW / 2
+    local destY = campPos_.y - drawH / 2
+
+    local paint = nvgImagePattern(nvg, destX, destY, drawW, drawH, 0, img, 1.0)
+    nvgBeginPath(nvg)
+    nvgRect(nvg, destX, destY, drawW, drawH)
+    nvgFillPaint(nvg, paint)
+    nvgFill(nvg)
+end
+
 --- 绘制仓库建筑精灵
 local function DrawWarehouse(nvg)
     local img = images_.warehouse
@@ -378,9 +398,16 @@ end
 
 --- 绘制单个装饰物（供外部 Y 排序后逐个调用）
 ---@param nvg NVGContextWrapper
----@param deco table 装饰物数据 {type, x, y, scale}
+---@param deco table 装饰物数据 {type, x, y, scale, chopped}
 ---@param index number 装饰物索引（用于动画帧偏移）
-function Map.DrawDecoration(nvg, deco, index)
+---@param drawStumpFn function|nil 可选：绘制树桩的回调（由 Follower 模块提供）
+function Map.DrawDecoration(nvg, deco, index, drawStumpFn)
+    -- 如果树已被砍伐，绘制树桩
+    if deco.chopped and drawStumpFn then
+        drawStumpFn(nvg, deco)
+        return
+    end
+
     local meta = treeMeta_[deco.type]
     if meta then
         local baseW = 100
@@ -431,6 +458,12 @@ end
 ---@param nvg NVGContextWrapper
 function Map.DrawCampSprite(nvg)
     DrawCamp(nvg)
+end
+
+--- 绘制城堡（供外部 Y 排序调用）
+---@param nvg NVGContextWrapper
+function Map.DrawCastleSprite(nvg)
+    DrawCastle(nvg)
 end
 
 --- 获取仓库位置

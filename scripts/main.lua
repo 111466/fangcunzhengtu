@@ -13,6 +13,7 @@ Projectile = require("scripts.Projectile")
 WaveManager = require("scripts.WaveManager")
 InputController = require("scripts.InputController")
 UI = require("scripts.UI")
+Follower = require("scripts.Follower")
 
 local gold_ = Config.INITIAL_GOLD
 local lives_ = Config.INITIAL_LIVES
@@ -45,6 +46,9 @@ local function ResetBattleObjects()
     Particle.list = {}
     Enemy = require("scripts.Enemy")
     Enemy.list = {}
+    Follower.list = {}
+    Follower.woodCount = 0
+    Follower.woodAnims = {}
     InputController.Reset()
 end
 
@@ -65,15 +69,22 @@ local function StartGame()
 
     ResetBattleObjects()
     Skills.Reset()
-    Hero.Init({ x = Config.HERO_SPAWN.x, y = Config.HERO_SPAWN.y })
-    Minimap.Init()
+
+    -- 英雄出生在城堡下方
+    local heroX = Config.HERO_SPAWN.x
+    local heroY = Config.HERO_SPAWN.y + Config.HERO_SPAWN_OFFSET_Y
+    Hero.Init({ x = heroX, y = heroY })
+    Minimap.Init(UI.isMobile)
 
     -- 初始化相机
     local dpr = graphics:GetDPR()
     local screenW = graphics:GetWidth() / dpr
     local screenH = graphics:GetHeight() / dpr
     Camera.Init(Config.WORLD_WIDTH, Config.WORLD_HEIGHT, screenW, screenH)
-    Camera.JumpTo(Config.HERO_SPAWN.x, Config.HERO_SPAWN.y)
+    Camera.JumpTo(heroX, heroY)
+
+    -- 创建初始随从（在英雄旁边）
+    Follower.Create(heroX + 50, heroY + 25)
 
     -- 禁用敌人波次（大地图模式暂不使用）
     WaveManager.Init(nil)
@@ -98,19 +109,21 @@ function Start()
     Hero.LoadSprite(nvg_)
     Tower.LoadSprites(nvg_)
     Projectile.LoadSprites(nvg_)
+    Follower.LoadSprites(nvg_)
 
     gold_ = Config.INITIAL_GOLD
     lives_ = Config.INITIAL_LIVES
     Skills.Reset()
-    Hero.Init({ x = Config.HERO_SPAWN.x, y = Config.HERO_SPAWN.y })
+    local initHeroY = Config.HERO_SPAWN.y + Config.HERO_SPAWN_OFFSET_Y
+    Hero.Init({ x = Config.HERO_SPAWN.x, y = initHeroY })
 
     -- 初始化相机
     local dpr = graphics:GetDPR()
     local screenW = graphics:GetWidth() / dpr
     local screenH = graphics:GetHeight() / dpr
     Camera.Init(Config.WORLD_WIDTH, Config.WORLD_HEIGHT, screenW, screenH)
-    Camera.JumpTo(Config.HERO_SPAWN.x, Config.HERO_SPAWN.y)
-    Minimap.Init()
+    Camera.JumpTo(Config.HERO_SPAWN.x, initHeroY)
+    Minimap.Init(UI.isMobile)
 
     WaveManager.Init(nil)
     WaveManager.allComplete = true
@@ -145,6 +158,21 @@ function HandleTouchBegin(eventType, eventData)
         return
     end
 
+    -- 先检查小地图
+    if Minimap.HandleClick(x, y, screenWidth, screenHeight) then
+        return
+    end
+
+    -- 点击树木 → 分配随从砍树
+    local worldX, worldY = Camera.ScreenToWorld(x, y)
+    local tree = Follower.FindTreeAt(worldX, worldY, Map.GetDecorations(), 60)
+    if tree then
+        if Follower.AssignChopTree(tree) then
+            -- 成功分配砍树任务，不再传递给其他输入处理
+            return
+        end
+    end
+
     InputController.HandleTouchBegin(touchID, x, y, screenWidth, screenHeight, gameState.phase)
 end
 
@@ -153,11 +181,27 @@ function HandleTouchMove(eventType, eventData)
     local x = eventData["X"]:GetInt() / dpr
     local y = eventData["Y"]:GetInt() / dpr
     local touchID = eventData["TouchID"]:GetInt()
+
+    -- 小地图拖拽
+    if Minimap.IsDragging() then
+        local screenWidth = graphics:GetWidth() / dpr
+        local screenHeight = graphics:GetHeight() / dpr
+        Minimap.HandleDrag(x, y, screenWidth, screenHeight)
+        return
+    end
+
     InputController.HandleTouchMove(touchID, x, y)
 end
 
 function HandleTouchEnd(eventType, eventData)
     local touchID = eventData["TouchID"]:GetInt()
+
+    -- 小地图松开
+    if Minimap.IsDragging() then
+        Minimap.HandleRelease()
+        return
+    end
+
     InputController.HandleTouchEnd(touchID)
 end
 
@@ -270,6 +314,9 @@ function HandleUpdate(eventType, eventData)
 
     Particle.UpdateAll(dt)
 
+    -- 更新随从
+    Follower.Update(dt, Hero.state, Enemy and Enemy.list or {})
+
     -- 更新地图动画
     Map.Update(dt)
 
@@ -308,16 +355,13 @@ function HandleNanoVGRender(eventType, eventData)
             end
         end
 
-        -- 营地建筑
-        local campPos = Map.GetCampPos()
-        if Camera.IsVisible(campPos.x, campPos.y, 200) then
-            table.insert(drawables, { y = campPos.y, kind = "camp" })
-        end
 
-        -- 仓库建筑
-        local whPos = Map.GetWarehousePos()
-        if Camera.IsVisible(whPos.x, whPos.y, 200) then
-            table.insert(drawables, { y = whPos.y, kind = "warehouse" })
+
+        -- 城堡建筑（领地中心）
+        local castlePos = Map.GetCampPos()
+        if Camera.IsVisible(castlePos.x, castlePos.y, 250) then
+            -- 城堡绘制高度 160，底部 Y = campPos.y + 80
+            table.insert(drawables, { y = castlePos.y + 80, kind = "castle" })
         end
 
         for _, tower in ipairs(Tower.list) do
@@ -333,18 +377,23 @@ function HandleNanoVGRender(eventType, eventData)
         if Hero.state.alive or Hero.state.animState == "die" then
             table.insert(drawables, { y = Hero.state.y, kind = "hero" })
         end
+        for _, follower in ipairs(Follower.list) do
+            if follower.alive then
+                table.insert(drawables, { y = follower.y, kind = "follower", obj = follower })
+            end
+        end
 
         table.sort(drawables, function(a, b) return a.y < b.y end)
 
         for _, d in ipairs(drawables) do
             if d.kind == "deco" then
-                Map.DrawDecoration(nvg_, d.obj, d.index)
-            elseif d.kind == "camp" then
-                Map.DrawCampSprite(nvg_)
-            elseif d.kind == "warehouse" then
-                Map.DrawWarehouseSprite(nvg_)
+                Map.DrawDecoration(nvg_, d.obj, d.index, Follower.DrawStump)
+            elseif d.kind == "castle" then
+                Map.DrawCastleSprite(nvg_)
             elseif d.kind == "hero" then
                 Hero.Draw(nvg_)
+            elseif d.kind == "follower" then
+                Follower.Draw(nvg_, d.obj)
             elseif d.kind == "enemy" then
                 Enemy.Draw(nvg_, d.obj)
             elseif d.kind == "tower" then
@@ -368,6 +417,9 @@ function HandleNanoVGRender(eventType, eventData)
             screenHeight = screenHeight,
         })
 
+        -- 木头飞行动画（屏幕空间）
+        Follower.DrawWoodAnims(nvg_, screenWidth, screenHeight)
+
         -- 领地离开警告
         if territoryWarning_.active and territoryWarning_.timer > 0 then
             local alpha = math.min(1.0, territoryWarning_.timer / 0.5) * 255
@@ -378,9 +430,9 @@ function HandleNanoVGRender(eventType, eventData)
             nvgFill(nvg_)
             -- 文字
             nvgFontSize(nvg_, 20)
-            nvgTextAlign(nvg_, 1) -- NVG_ALIGN_CENTER
+            nvgTextAlign(nvg_, 18) -- NVG_ALIGN_CENTER(2) | NVG_ALIGN_MIDDLE(16)
             nvgFillColor(nvg_, nvgRGBA(255, 255, 200, math.floor(alpha)))
-            nvgText(nvg_, screenWidth / 2, 107, "你已离开领地范围，注意安全！")
+            nvgText(nvg_, screenWidth / 2, 102, "你已离开领地范围，注意安全！")
         end
 
         -- 移动端虚拟控件
@@ -410,6 +462,7 @@ function HandleNanoVGRender(eventType, eventData)
 end
 
 function Stop()
+    Follower.CleanupSprites(nvg_)
     Projectile.CleanupSprites(nvg_)
     Tower.CleanupSprites(nvg_)
     Hero.CleanupSprite(nvg_)

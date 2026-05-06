@@ -12,6 +12,9 @@ local oy_ = 0
 -- 平滑跟随参数
 local lerpSpeed_ = 5.0
 
+-- 跟随暂停标志（小地图跳转时使用）
+local followPaused_ = false
+
 --- 初始化相机
 ---@param worldW number 世界宽度
 ---@param worldH number 世界高度
@@ -24,6 +27,7 @@ function Camera.Init(worldW, worldH, viewW, viewH)
     viewH_ = viewH
     ox_ = 0
     oy_ = 0
+    followPaused_ = false
 end
 
 --- 更新视口尺寸（窗口大小变化时）
@@ -39,6 +43,8 @@ end
 ---@param targetY number 目标世界 Y
 ---@param dt number 帧间隔
 function Camera.Follow(targetX, targetY, dt)
+    if followPaused_ then return end
+
     -- 目标偏移：让目标处于屏幕中心
     local desiredOX = targetX - viewW_ / 2
     local desiredOY = targetY - viewH_ / 2
@@ -53,6 +59,16 @@ function Camera.Follow(targetX, targetY, dt)
     local t = 1 - math.exp(-lerpSpeed_ * dt)
     ox_ = ox_ + (desiredOX - ox_) * t
     oy_ = oy_ + (desiredOY - oy_) * t
+end
+
+--- 暂停跟随（小地图跳转时使用）
+function Camera.PauseFollow()
+    followPaused_ = true
+end
+
+--- 恢复跟随
+function Camera.ResumeFollow()
+    followPaused_ = false
 end
 
 --- 立即跳转到目标位置（无平滑）

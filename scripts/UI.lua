@@ -113,7 +113,7 @@ function UI.DrawTitleScreen(nvg, screenWidth, screenHeight)
     end
 
     -- ===== 标题文字 =====
-    nvgTextAlign(nvg, 1)
+    nvgTextAlign(nvg, 2) -- NVG_ALIGN_CENTER
 
     -- 主标题：方寸征途
     local titleSize = math.floor(52 * sf)
@@ -185,20 +185,12 @@ function UI.DrawTitleScreen(nvg, screenWidth, screenHeight)
     nvgStroke(nvg)
 
     -- 按钮文字
-    nvgTextAlign(nvg, 1)
+    nvgTextAlign(nvg, 2) -- NVG_ALIGN_CENTER
     nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
     nvgFontSize(nvg, math.floor(22 * sf))
     nvgText(nvg, cx, btnY + btnH / 2 + 8 * sf, "开始征程")
 
-    -- 按钮图标（小剑）
-    local swordSize = math.floor(18 * sf)
-    nvgStrokeColor(nvg, nvgRGBA(255, 255, 255, 220))
-    nvgStrokeWidth(nvg, 2)
-    nvgBeginPath(nvg)
-    nvgMoveTo(nvg, btnX + 35 * sf, btnY + btnH / 2 + swordSize)
-    nvgLineTo(nvg, btnX + 35 * sf, btnY + btnH / 2 - swordSize)
-    nvgLineTo(nvg, btnX + 35 * sf + swordSize * 0.7, btnY + btnH / 2 - swordSize * 0.5)
-    nvgStroke(nvg)
+
 
     -- ===== 操作提示 =====
     local hintY = btnY + btnH + 35 * sf
@@ -221,10 +213,9 @@ function UI.DrawBattleHUD(nvg, gold, lives, heroState, screenWidth, screenHeight
     local isMobile = UI.isMobile
     local sf = math.max(0.6, math.min(1.0, screenWidth / 1280))
 
-    nvgTextAlign(nvg, 3)
-
     -- 顶部信息栏（响应式宽度）
-    local barW = isMobile and math.min(screenWidth - 20, 380) or 600
+    local colCount = isMobile and 4 or 5
+    local barW = isMobile and math.min(screenWidth - 20, 440) or 680
     local barH = math.floor(48 * sf)
     nvgFillColor(nvg, nvgRGBA(235, 244, 255, 235))
     nvgBeginPath(nvg)
@@ -239,19 +230,26 @@ function UI.DrawBattleHUD(nvg, gold, lives, heroState, screenWidth, screenHeight
 
     local fontSize = math.floor(isMobile and 14 or 18)
     local textY = 10 + barH / 2 + 5
-    local gap = isMobile and math.floor(barW / 3.5) or 140
+    local padX = 16
+    local colW = (barW - padX * 2) / colCount
 
+    nvgTextAlign(nvg, 2) -- NVG_ALIGN_CENTER
     nvgFontSize(nvg, fontSize)
     nvgFillColor(nvg, nvgRGBA(255, 215, 0, 255))
-    nvgText(nvg, 26, textY, "金币:" .. gold)
+    nvgText(nvg, 10 + padX + colW * 0.5, textY, "金币:" .. gold)
     nvgFillColor(nvg, nvgRGBA(255, 80, 80, 255))
-    nvgText(nvg, 26 + gap, textY, "据点:" .. lives)
+    nvgText(nvg, 10 + padX + colW * 1.5, textY, "据点:" .. lives)
     nvgFillColor(nvg, nvgRGBA(80, 180, 120, 255))
-    nvgText(nvg, 26 + gap * 2, textY, "击杀:" .. heroState.killCount)
+    nvgText(nvg, 10 + padX + colW * 2.5, textY, "击杀:" .. heroState.killCount)
+
+    -- 木头资源（使用 Follower 模块的 woodCount）
+    local woodCount = Follower and Follower.woodCount or 0
+    nvgFillColor(nvg, nvgRGBA(180, 130, 60, 255))
+    nvgText(nvg, 10 + padX + colW * 3.5, textY, "木头:" .. woodCount)
 
     if not isMobile then
         nvgFillColor(nvg, nvgRGBA(90, 110, 155, 255))
-        nvgText(nvg, 26 + gap * 3, textY, "建塔 5-8  地图 M")
+        nvgText(nvg, 10 + padX + colW * 4.5, textY, "建塔 5-8  地图 M")
     end
 
     UI.DrawHeroBars(nvg, heroState)
@@ -283,7 +281,7 @@ function UI.DrawHeroBars(nvg, heroState)
 
     nvgFillColor(nvg, nvgRGBA(35, 40, 55, 255))
     nvgFontSize(nvg, 12)
-    nvgTextAlign(nvg, 1)
+    nvgTextAlign(nvg, 2) -- NVG_ALIGN_CENTER
     nvgText(nvg, bx + 90, by + 12, math.floor(heroState.hp) .. "/" .. heroState.maxHP)
 
     nvgFillColor(nvg, nvgRGBA(225, 233, 250, 220))

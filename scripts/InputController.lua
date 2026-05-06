@@ -258,14 +258,29 @@ function InputController.HandleInput(dt, gameState)
         Minimap.Toggle()
     end
 
+    -- 小地图拖拽处理（优先级最高）
+    local dpr = graphics:GetDPR()
+    local screenWidth = graphics:GetWidth() / dpr
+    local screenHeight = graphics:GetHeight() / dpr
+
+    if Minimap.IsDragging() then
+        if input:GetMouseButtonDown(MOUSEB_LEFT) then
+            -- 鼠标仍按住 → 持续拖拽
+            local pos = input:GetMousePosition()
+            local mx = pos.x / dpr
+            local my = pos.y / dpr
+            Minimap.HandleDrag(mx, my, screenWidth, screenHeight)
+        else
+            -- 鼠标已松开 → 结束拖拽
+            Minimap.HandleRelease()
+        end
+    end
+
     -- 鼠标左键
     if input:GetMouseButtonPress(MOUSEB_LEFT) then
         local pos = input:GetMousePosition()
-        local dpr = graphics:GetDPR()
         local mx = pos.x / dpr
         local my = pos.y / dpr
-        local screenWidth = graphics:GetWidth() / dpr
-        local screenHeight = graphics:GetHeight() / dpr
 
         -- 先检查小地图是否消费此事件
         if Minimap.HandleClick(mx, my, screenWidth, screenHeight) then
@@ -276,11 +291,17 @@ function InputController.HandleInput(dt, gameState)
             if towerType then
                 s.placingTower = towerType
             else
-                -- 屏幕坐标 → 世界坐标 后检查塔选中
+                -- 屏幕坐标 → 世界坐标 后检查砍树/塔选中
                 local wx, wy = Camera.ScreenToWorld(mx, my)
-                local selectedTower = Tower.SelectAt(wx, wy)
-                if not selectedTower then
-                    s.attacking = true
+                -- 先检查是否点击了树木（分配随从砍树）
+                local clickedTree = Follower and Follower.FindTreeAt(wx, wy, Map.GetDecorations(), 60)
+                if clickedTree and Follower.AssignChopTree(clickedTree) then
+                    -- 成功分配砍树，不做其他处理
+                else
+                    local selectedTower = Tower.SelectAt(wx, wy)
+                    if not selectedTower and not isMobile then
+                        s.attacking = true
+                    end
                 end
             end
         end
@@ -298,7 +319,6 @@ function InputController.HandleInput(dt, gameState)
     -- 鼠标右键放塔（使用世界坐标）
     if input:GetMouseButtonDown(MOUSEB_RIGHT) then
         local pos = input:GetMousePosition()
-        local dpr = graphics:GetDPR()
         local sx, sy = pos.x / dpr, pos.y / dpr
         if s.placingTower then
             local wx, wy = Camera.ScreenToWorld(sx, sy)
