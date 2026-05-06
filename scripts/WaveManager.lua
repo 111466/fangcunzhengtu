@@ -1,4 +1,7 @@
 
+-- Path 模块已移除（大地图模式不再使用路径），保留桩以兼容旧逻辑
+local Path = { routes = {}, RandomRoute = function() return {} end }
+
 local WaveManager = {}
 WaveManager.waves = {}
 

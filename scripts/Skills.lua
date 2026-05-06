@@ -1,4 +1,6 @@
 
+local Config = require("scripts.Config")
+
 local Skills = {}
 
 Skills.definitions = {
@@ -179,7 +181,7 @@ function Skills.Charge(heroATK, def, level, enemies)
     local reward = 0
     local kills = 0
     local startX = Hero.state.x
-    Hero.state.x = math.max(20, math.min(Hero.state.x + Hero.state.facing * dist, 1430))
+    Hero.state.x = math.max(20, math.min(Hero.state.x + Hero.state.facing * dist, Config.WORLD_WIDTH - 20))
 
     for _, enemy in ipairs(enemies) do
         if enemy.alive then

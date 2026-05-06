@@ -1,5 +1,14 @@
 
+local PlatformUtils = require "urhox-libs.Platform.PlatformUtils"
+
 local UI = {}
+
+-- 平台检测缓存
+UI.isMobile = false
+
+function UI.DetectPlatform()
+    UI.isMobile = PlatformUtils.IsMobilePlatform() or PlatformUtils.IsWebPlatform()
+end
 
 local function PointInRect(mx, my, x, y, w, h)
     return mx >= x and mx <= x + w and my >= y and my <= y + h
@@ -10,19 +19,14 @@ function UI.Render(nvg, view)
 
     if view.phase == "title" then
         UI.DrawTitleScreen(nvg, view.screenWidth, view.screenHeight)
-    elseif view.phase == "level_select" then
-        UI.DrawLevelSelect(nvg, view.levels, view.screenWidth, view.screenHeight)
     else
         UI.DrawBattleHUD(
             nvg,
             view.gold,
             view.lives,
-            view.wave,
             view.heroState,
             view.screenWidth,
-            view.screenHeight,
-            view.currentLevel,
-            view.totalWaves
+            view.screenHeight
         )
     end
 
@@ -30,163 +34,175 @@ function UI.Render(nvg, view)
 end
 
 function UI.DrawTitleScreen(nvg, screenWidth, screenHeight)
-    nvgFillColor(nvg, nvgRGBA(28, 38, 62, 255))
+    local cx = screenWidth / 2
+    local cy = screenHeight / 2
+    local isMobile = UI.isMobile
+    -- 响应式缩放因子：基准 720p 宽度
+    local sf = math.max(0.55, math.min(1.0, screenWidth / 1280))
+
+    -- 全屏背景渐变
+    local bgGrad = nvgLinearGradient(nvg, 0, 0, 0, screenHeight,
+        nvgRGBA(18, 28, 48, 255), nvgRGBA(35, 55, 85, 255))
     nvgBeginPath(nvg)
     nvgRect(nvg, 0, 0, screenWidth, screenHeight)
+    nvgFillPaint(nvg, bgGrad)
     nvgFill(nvg)
 
-    nvgFillColor(nvg, nvgRGBA(52, 74, 118, 255))
+    -- 装饰星星
+    math.randomseed(42)
+    for i = 1, 40 do
+        local sx = math.random() * screenWidth
+        local sy = math.random() * screenHeight * 0.7
+        local sr = 0.5 + math.random() * 1.5
+        local sa = 60 + math.floor(math.random() * 120)
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, sx, sy, sr)
+        nvgFillColor(nvg, nvgRGBA(200, 220, 255, sa))
+        nvgFill(nvg)
+    end
+
+    -- 中心面板
+    local panelW = math.min(500 * sf, screenWidth - 40)
+    local panelH = math.min(420 * sf, screenHeight - 40)
+    local panelX = cx - panelW / 2
+    local panelY = cy - panelH / 2
+
+    -- 面板背景（毛玻璃感）
+    local panelGrad = nvgLinearGradient(nvg, panelX, panelY, panelX, panelY + panelH,
+        nvgRGBA(45, 65, 110, 210), nvgRGBA(30, 45, 80, 230))
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, 120, 90, screenWidth - 240, screenHeight - 180, 28)
+    nvgRoundedRect(nvg, panelX, panelY, panelW, panelH, 20 * sf)
+    nvgFillPaint(nvg, panelGrad)
     nvgFill(nvg)
 
-    nvgStrokeColor(nvg, nvgRGBA(128, 178, 255, 180))
-    nvgStrokeWidth(nvg, 2)
+    -- 面板边框光晕
+    nvgStrokeColor(nvg, nvgRGBA(120, 170, 255, 80))
+    nvgStrokeWidth(nvg, 1.5)
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, 120, 90, screenWidth - 240, screenHeight - 180, 28)
+    nvgRoundedRect(nvg, panelX, panelY, panelW, panelH, 20 * sf)
     nvgStroke(nvg)
 
-    nvgTextAlign(nvg, 1)
-    nvgFillColor(nvg, nvgRGBA(255, 244, 212, 255))
-    nvgFontSize(nvg, 52)
-    nvgText(nvg, screenWidth / 2, 210, "Tiny Swords")
+    -- 标题
+    nvgTextAlign(nvg, 1) -- NVG_ALIGN_CENTER
+    local titleSize = math.floor(44 * sf)
+    nvgFontSize(nvg, titleSize)
+    nvgFillColor(nvg, nvgRGBA(255, 230, 180, 255))
+    local titleY = panelY + 55 * sf
+    nvgText(nvg, cx, titleY, "Tiny Swords")
 
-    nvgFillColor(nvg, nvgRGBA(226, 238, 255, 255))
-    nvgFontSize(nvg, 28)
-    nvgText(nvg, screenWidth / 2, 260, "动作 RPG + 塔防 守卫战")
+    -- 副标题
+    local subSize = math.floor(20 * sf)
+    nvgFontSize(nvg, subSize)
+    nvgFillColor(nvg, nvgRGBA(180, 210, 255, 230))
+    nvgText(nvg, cx, titleY + 36 * sf, "大地图探索 · 攻城略地")
 
-    nvgFontSize(nvg, 18)
-    nvgFillColor(nvg, nvgRGBA(214, 224, 240, 220))
-    nvgText(nvg, screenWidth / 2, 315, "操控英雄近战迎敌，搭配技能与防御塔守住最后据点。")
+    -- 描述
+    local descSize = math.floor(14 * sf)
+    nvgFontSize(nvg, descSize)
+    nvgFillColor(nvg, nvgRGBA(170, 190, 220, 200))
+    nvgText(nvg, cx, titleY + 72 * sf, "探索广袤世界，建造营地，征服据点")
 
-    local buttonX = screenWidth / 2 - 130
-    local buttonY = screenHeight / 2 + 20
-    local buttonW = 260
-    local buttonH = 64
-    UI.DrawButton(nvg, buttonX, buttonY, buttonW, buttonH, "开始游戏", true)
+    -- 开始按钮（大按钮，触屏友好）
+    local btnW = math.floor(220 * sf)
+    local btnH = math.floor(56 * sf)
+    if isMobile then
+        btnW = math.floor(260 * sf)
+        btnH = math.floor(64 * sf)
+    end
+    local btnX = cx - btnW / 2
+    local btnY = panelY + panelH * 0.55
 
-    nvgFontSize(nvg, 18)
-    nvgFillColor(nvg, nvgRGBA(235, 240, 248, 255))
-    nvgText(nvg, screenWidth / 2, buttonY + 110, "回车 / 空格 或 点击按钮继续")
+    -- 按钮存储用于点击检测
+    UI._titleBtnRect = { x = btnX, y = btnY, w = btnW, h = btnH }
 
-    nvgFontSize(nvg, 16)
-    nvgFillColor(nvg, nvgRGBA(210, 220, 238, 220))
-    nvgText(nvg, screenWidth / 2, screenHeight - 150, "移动: WASD   普攻: 空格/左键   建塔: 5/6/7/8 + 右键")
-    nvgText(nvg, screenWidth / 2, screenHeight - 118, "技能: 1/2/3/4   升级: F1-F4/U   购买装备: Z/X/C")
-end
-
-function UI.DrawLevelSelect(nvg, levels, screenWidth, screenHeight)
-    nvgFillColor(nvg, nvgRGBA(22, 30, 48, 255))
+    -- 按钮渐变
+    local btnGrad = nvgLinearGradient(nvg, btnX, btnY, btnX, btnY + btnH,
+        nvgRGBA(80, 140, 255, 240), nvgRGBA(60, 110, 220, 240))
     nvgBeginPath(nvg)
-    nvgRect(nvg, 0, 0, screenWidth, screenHeight)
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 12 * sf)
+    nvgFillPaint(nvg, btnGrad)
     nvgFill(nvg)
 
+    -- 按钮高光
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, btnX + 1, btnY + 1, btnW - 2, btnH / 2, 12 * sf)
+    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 25))
+    nvgFill(nvg)
+
+    -- 按钮边框
+    nvgStrokeColor(nvg, nvgRGBA(160, 200, 255, 150))
+    nvgStrokeWidth(nvg, 1.5)
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 12 * sf)
+    nvgStroke(nvg)
+
+    -- 按钮文字
     nvgTextAlign(nvg, 1)
-    nvgFillColor(nvg, nvgRGBA(255, 244, 212, 255))
-    nvgFontSize(nvg, 42)
-    nvgText(nvg, screenWidth / 2, 100, "选择关卡")
+    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
+    nvgFontSize(nvg, math.floor(20 * sf))
+    nvgText(nvg, cx, btnY + btnH / 2 + 7 * sf, "开始探索")
 
-    nvgFontSize(nvg, 18)
-    nvgFillColor(nvg, nvgRGBA(210, 220, 238, 220))
-    nvgText(nvg, screenWidth / 2, 138, "点击任意关卡立即开始战斗")
-
-    UI.DrawButton(nvg, 40, 40, 120, 42, "返回", false)
-
-    local cardWidth = 320
-    local cardHeight = 250
-    local gap = 24
-    local totalWidth = (#levels * cardWidth) + ((#levels - 1) * gap)
-    local startX = (screenWidth - totalWidth) / 2
-    local startY = 200
-
-    for i, level in ipairs(levels) do
-        local x = startX + (i - 1) * (cardWidth + gap)
-        local y = startY
-
-        nvgFillColor(nvg, nvgRGBA(58, 78, 118, 235))
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, x, y, cardWidth, cardHeight, 18)
-        nvgFill(nvg)
-
-        nvgStrokeColor(nvg, nvgRGBA(138, 184, 255, 220))
-        nvgStrokeWidth(nvg, 2)
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, x, y, cardWidth, cardHeight, 18)
-        nvgStroke(nvg)
-
-        nvgTextAlign(nvg, 0)
-        nvgFillColor(nvg, nvgRGBA(255, 230, 160, 255))
-        nvgFontSize(nvg, 18)
-        nvgText(nvg, x + 22, y + 36, level.tag)
-
-        nvgFillColor(nvg, nvgRGBA(245, 248, 255, 255))
-        nvgFontSize(nvg, 28)
-        nvgText(nvg, x + 22, y + 78, level.name)
-
-        nvgFillColor(nvg, nvgRGBA(220, 228, 244, 230))
-        nvgFontSize(nvg, 16)
-        nvgTextBox(nvg, x + 22, y + 112, cardWidth - 44, level.description)
-
-        nvgFillColor(nvg, nvgRGBA(180, 224, 255, 255))
-        nvgText(nvg, x + 22, y + 178, "初始金币: " .. level.initialGold)
-        nvgText(nvg, x + 22, y + 206, "据点耐久: " .. level.initialLives)
-        nvgText(nvg, x + 22, y + 234, "波次规模: " .. #level.waves .. " 波")
+    -- 操作提示
+    local hintY = btnY + btnH + 30 * sf
+    nvgFontSize(nvg, math.floor(13 * sf))
+    nvgFillColor(nvg, nvgRGBA(150, 175, 210, 180))
+    if isMobile then
+        nvgText(nvg, cx, hintY, "触屏点击开始  ·  虚拟摇杆移动  ·  按钮攻击")
+    else
+        nvgText(nvg, cx, hintY, "点击按钮或按 空格/回车 开始")
+        nvgText(nvg, cx, hintY + 20 * sf, "WASD 移动  ·  空格/左键攻击  ·  M 地图")
     end
+
+    -- 底部版本号
+    nvgFontSize(nvg, math.floor(11 * sf))
+    nvgFillColor(nvg, nvgRGBA(100, 130, 170, 120))
+    nvgText(nvg, cx, screenHeight - 12, "Tiny Swords v1.0")
 end
 
-function UI.DrawBattleHUD(nvg, gold, lives, wave, heroState, screenWidth, screenHeight, currentLevel, totalWaves)
+function UI.DrawBattleHUD(nvg, gold, lives, heroState, screenWidth, screenHeight)
+    local isMobile = UI.isMobile
+    local sf = math.max(0.6, math.min(1.0, screenWidth / 1280))
+
     nvgTextAlign(nvg, 3)
 
+    -- 顶部信息栏（响应式宽度）
+    local barW = isMobile and math.min(screenWidth - 20, 380) or 600
+    local barH = math.floor(48 * sf)
     nvgFillColor(nvg, nvgRGBA(235, 244, 255, 235))
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, 10, 10, screenWidth - 20, 52, 14)
+    nvgRoundedRect(nvg, 10, 10, barW, barH, 14 * sf)
     nvgFill(nvg)
 
     nvgStrokeColor(nvg, nvgRGBA(150, 188, 235, 255))
     nvgStrokeWidth(nvg, 2)
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, 10, 10, screenWidth - 20, 52, 14)
+    nvgRoundedRect(nvg, 10, 10, barW, barH, 14 * sf)
     nvgStroke(nvg)
 
-    nvgFontSize(nvg, 18)
-    nvgFillColor(nvg, nvgRGBA(255, 215, 0, 255))
-    nvgText(nvg, 26, 32, "金币: " .. gold)
-    nvgFillColor(nvg, nvgRGBA(255, 80, 80, 255))
-    nvgText(nvg, 180, 32, "据点: " .. lives)
-    nvgFillColor(nvg, nvgRGBA(70, 85, 120, 255))
-    nvgText(nvg, 330, 32, "波次: " .. wave .. "/" .. totalWaves)
-    nvgFillColor(nvg, nvgRGBA(80, 180, 120, 255))
-    nvgText(nvg, 500, 32, "击杀: " .. heroState.killCount)
-    nvgFillColor(nvg, nvgRGBA(90, 110, 155, 255))
-    nvgText(nvg, 660, 32, "建塔 5/6/7/8")
-    nvgText(nvg, 820, 32, "升级 F1-F4/U")
-    nvgText(nvg, 980, 32, "装备 Z/X/C")
+    local fontSize = math.floor(isMobile and 14 or 18)
+    local textY = 10 + barH / 2 + 5
+    local gap = isMobile and math.floor(barW / 3.5) or 140
 
-    if currentLevel then
-        nvgTextAlign(nvg, 1)
-        nvgFillColor(nvg, nvgRGBA(225, 238, 255, 255))
-        nvgFontSize(nvg, 16)
-        nvgText(nvg, screenWidth / 2, 84, "当前关卡: " .. currentLevel.name .. "    Esc 返回主菜单")
+    nvgFontSize(nvg, fontSize)
+    nvgFillColor(nvg, nvgRGBA(255, 215, 0, 255))
+    nvgText(nvg, 26, textY, "金币:" .. gold)
+    nvgFillColor(nvg, nvgRGBA(255, 80, 80, 255))
+    nvgText(nvg, 26 + gap, textY, "据点:" .. lives)
+    nvgFillColor(nvg, nvgRGBA(80, 180, 120, 255))
+    nvgText(nvg, 26 + gap * 2, textY, "击杀:" .. heroState.killCount)
+
+    if not isMobile then
+        nvgFillColor(nvg, nvgRGBA(90, 110, 155, 255))
+        nvgText(nvg, 26 + gap * 3, textY, "建塔 5-8  地图 M")
     end
 
     UI.DrawHeroBars(nvg, heroState)
-    UI.DrawSkillBar(nvg, screenWidth, screenHeight)
-    UI.DrawTowerBar(nvg, gold, screenWidth, screenHeight)
-    UI.DrawEquipmentBar(nvg, gold, screenWidth, screenHeight)
-    UI.DrawSelectionHint(nvg, screenWidth, screenHeight)
 
-    if not WaveManager.waveActive and not WaveManager.allComplete then
-        local remaining = math.ceil(math.max(WaveManager.prepTimer, 0))
-        nvgFillColor(nvg, nvgRGBA(255, 200, 50, 255))
-        nvgFontSize(nvg, 28)
-        nvgTextAlign(nvg, 1)
-        nvgText(nvg, screenWidth / 2, 116, "下一波: " .. remaining .. "秒")
-    end
-
-    if WaveManager.allComplete then
-        UI.DrawBattleEndOverlay(nvg, screenWidth, screenHeight, true)
-    elseif not heroState.alive or lives <= 0 then
-        UI.DrawBattleEndOverlay(nvg, screenWidth, screenHeight, false)
+    -- 移动端不显示技能栏和塔栏（用触屏按钮代替）
+    if not isMobile then
+        UI.DrawSkillBar(nvg, screenWidth, screenHeight)
+        UI.DrawTowerBar(nvg, gold, screenWidth, screenHeight)
+        UI.DrawSelectionHint(nvg, screenWidth, screenHeight)
     end
 end
 
@@ -322,49 +338,6 @@ function UI.DrawTowerBar(nvg, gold, screenWidth, screenHeight)
     end
 end
 
-function UI.DrawEquipmentBar(nvg, gold, screenWidth, screenHeight)
-    local startX = 220
-    local sy = screenHeight - 70
-    local slots = { "weapon", "armor", "accessory" }
-    local labels = { weapon = "武器 Z", armor = "护甲 X", accessory = "饰品 C" }
-
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 220))
-    nvgFontSize(nvg, 14)
-    nvgTextAlign(nvg, 0)
-    nvgText(nvg, startX, sy - 8, "装备购买")
-
-    for i, slot in ipairs(slots) do
-        local itemId = Equipment.GetNextItem(slot)
-        local tx = startX + (i - 1) * 95
-        local item = itemId and Equipment.items[itemId] or nil
-
-        nvgFillColor(nvg, nvgRGBA(240, 236, 228, 230))
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, tx, sy, 85, 55, 8)
-        nvgFill(nvg)
-        nvgStrokeColor(nvg, nvgRGBA(176, 150, 104, 255))
-        nvgStrokeWidth(nvg, 2)
-        nvgBeginPath(nvg)
-        nvgRoundedRect(nvg, tx, sy, 85, 55, 8)
-        nvgStroke(nvg)
-
-        nvgFillColor(nvg, nvgRGBA(82, 64, 42, 255))
-        nvgFontSize(nvg, 11)
-        nvgTextAlign(nvg, 1)
-        nvgText(nvg, tx + 42, sy + 18, labels[slot])
-
-        if item then
-            nvgFillColor(nvg, nvgRGBA(gold >= item.price and 70 or 140, 90, 120, 255))
-            nvgText(nvg, tx + 42, sy + 34, item.name)
-            nvgFillColor(nvg, nvgRGBA(190, 130, 40, 255))
-            nvgText(nvg, tx + 42, sy + 49, item.price .. "G")
-        else
-            nvgFillColor(nvg, nvgRGBA(110, 110, 110, 255))
-            nvgText(nvg, tx + 42, sy + 36, "已满级")
-        end
-    end
-end
-
 function UI.DrawSelectionHint(nvg, screenWidth, screenHeight)
     if not InputController.state.placingTower then return end
     nvgFillColor(nvg, nvgRGBA(255, 245, 200, 255))
@@ -372,52 +345,6 @@ function UI.DrawSelectionHint(nvg, screenWidth, screenHeight)
     nvgTextAlign(nvg, 1)
     nvgText(nvg, screenWidth / 2, screenHeight - 92,
         "已选择 " .. Tower.types[InputController.state.placingTower].name .. "，右键放置")
-end
-
-function UI.DrawBattleEndOverlay(nvg, screenWidth, screenHeight, victory)
-    nvgFillColor(nvg, nvgRGBA(10, 14, 24, 165))
-    nvgBeginPath(nvg)
-    nvgRect(nvg, 0, 0, screenWidth, screenHeight)
-    nvgFill(nvg)
-
-    local panelX = screenWidth / 2 - 220
-    local panelY = screenHeight / 2 - 120
-    local panelW = 440
-    local panelH = 240
-
-    nvgFillColor(nvg, nvgRGBA(34, 46, 70, 245))
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, panelX, panelY, panelW, panelH, 20)
-    nvgFill(nvg)
-
-    nvgStrokeColor(nvg, nvgRGBA(146, 190, 255, 220))
-    nvgStrokeWidth(nvg, 2)
-    nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, panelX, panelY, panelW, panelH, 20)
-    nvgStroke(nvg)
-
-    nvgTextAlign(nvg, 1)
-    nvgFontSize(nvg, 38)
-    if victory then
-        nvgFillColor(nvg, nvgRGBA(90, 210, 130, 255))
-        nvgText(nvg, screenWidth / 2, panelY + 72, "胜利！")
-        nvgFillColor(nvg, nvgRGBA(224, 236, 248, 230))
-        nvgFontSize(nvg, 18)
-        nvgText(nvg, screenWidth / 2, panelY + 108, "成功守住据点，准备迎接下一场战斗。")
-    else
-        nvgFillColor(nvg, nvgRGBA(255, 92, 92, 255))
-        nvgText(nvg, screenWidth / 2, panelY + 72, "游戏结束")
-        nvgFillColor(nvg, nvgRGBA(224, 236, 248, 230))
-        nvgFontSize(nvg, 18)
-        nvgText(nvg, screenWidth / 2, panelY + 108, "据点失守，可以重整阵型后再次挑战。")
-    end
-
-    UI.DrawButton(nvg, screenWidth / 2 - 170, panelY + 150, 150, 52, "重新挑战", true)
-    UI.DrawButton(nvg, screenWidth / 2 + 20, panelY + 150, 150, 52, "主菜单", false)
-
-    nvgFillColor(nvg, nvgRGBA(206, 216, 234, 220))
-    nvgFontSize(nvg, 14)
-    nvgText(nvg, screenWidth / 2, panelY + 222, "快捷键: R 重新开始, Esc 返回菜单")
 end
 
 function UI.DrawButton(nvg, x, y, w, h, label, primary)
@@ -484,6 +411,101 @@ function UI.DrawSkillIcon(nvg, skillId, sx, sy)
     end
 end
 
+-- ========== 移动端虚拟控件绘制 ==========
+
+function UI.DrawTouchControls(nvg, screenWidth, screenHeight)
+    if not UI.isMobile then return end
+    local t = InputController.touch
+
+    -- ---- 虚拟摇杆 ----
+    local baseX, baseY = InputController.GetJoystickBasePos(screenWidth, screenHeight)
+    local jRadius = t.JOYSTICK_RADIUS
+    local knobRadius = 22
+
+    if t.joystickActive then
+        -- 激活时：以触摸起始点为中心
+        baseX = t.joystickCenterX
+        baseY = t.joystickCenterY
+    end
+
+    -- 外圈底盘
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, baseX, baseY, jRadius)
+    nvgFillColor(nvg, nvgRGBA(255, 255, 255, t.joystickActive and 40 or 25))
+    nvgFill(nvg)
+    nvgStrokeColor(nvg, nvgRGBA(255, 255, 255, t.joystickActive and 80 or 45))
+    nvgStrokeWidth(nvg, 2)
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, baseX, baseY, jRadius)
+    nvgStroke(nvg)
+
+    -- 摇杆手柄（小圆点）
+    local knobX = baseX + t.joystickDirX * t.JOYSTICK_MAX
+    local knobY = baseY + t.joystickDirY * t.JOYSTICK_MAX
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, knobX, knobY, knobRadius)
+    local knobGrad = nvgRadialGradient(nvg, knobX, knobY, 0, knobRadius,
+        nvgRGBA(255, 255, 255, t.joystickActive and 160 or 90),
+        nvgRGBA(200, 220, 255, t.joystickActive and 100 or 50))
+    nvgFillPaint(nvg, knobGrad)
+    nvgFill(nvg)
+
+    -- 不活跃时显示方向箭头提示
+    if not t.joystickActive then
+        nvgFontSize(nvg, 18)
+        nvgTextAlign(nvg, 1) -- center
+        nvgFillColor(nvg, nvgRGBA(255, 255, 255, 40))
+        nvgText(nvg, baseX, baseY - jRadius + 20, "^")
+        nvgText(nvg, baseX, baseY + jRadius - 8, "v")
+        nvgFontSize(nvg, 14)
+        nvgText(nvg, baseX - jRadius + 14, baseY + 5, "<")
+        nvgText(nvg, baseX + jRadius - 14, baseY + 5, ">")
+    end
+
+    -- ---- 攻击按钮 ----
+    local atkX, atkY = InputController.GetAttackButtonPos(screenWidth, screenHeight)
+    local atkR = t.ATTACK_BTN_RADIUS
+
+    -- 按钮背景
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, atkX, atkY, atkR)
+    if t.attackActive then
+        local pressGrad = nvgRadialGradient(nvg, atkX, atkY, 0, atkR,
+            nvgRGBA(255, 100, 80, 180), nvgRGBA(220, 60, 40, 120))
+        nvgFillPaint(nvg, pressGrad)
+    else
+        local idleGrad = nvgRadialGradient(nvg, atkX, atkY, 0, atkR,
+            nvgRGBA(255, 80, 60, 130), nvgRGBA(200, 50, 30, 80))
+        nvgFillPaint(nvg, idleGrad)
+    end
+    nvgFill(nvg)
+
+    -- 按钮边框
+    nvgStrokeColor(nvg, nvgRGBA(255, 150, 130, t.attackActive and 200 or 100))
+    nvgStrokeWidth(nvg, 2.5)
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, atkX, atkY, atkR)
+    nvgStroke(nvg)
+
+    -- 剑图标（两条交叉线）
+    nvgStrokeColor(nvg, nvgRGBA(255, 255, 255, t.attackActive and 255 or 180))
+    nvgStrokeWidth(nvg, 3)
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, atkX - 12, atkY - 12)
+    nvgLineTo(nvg, atkX + 12, atkY + 12)
+    nvgStroke(nvg)
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, atkX + 12, atkY - 12)
+    nvgLineTo(nvg, atkX - 12, atkY + 12)
+    nvgStroke(nvg)
+
+    -- "攻击" 文字
+    nvgFontSize(nvg, 12)
+    nvgTextAlign(nvg, 1)
+    nvgFillColor(nvg, nvgRGBA(255, 255, 255, t.attackActive and 255 or 150))
+    nvgText(nvg, atkX, atkY + atkR + 16, "攻击")
+end
+
 function UI.GetTowerCardAt(mx, my, screenWidth, screenHeight)
     local startX = screenWidth - 350
     local ty = screenHeight - 70
@@ -497,48 +519,10 @@ function UI.GetTowerCardAt(mx, my, screenWidth, screenHeight)
     return nil
 end
 
-function UI.GetEquipmentCardAt(mx, my, screenWidth, screenHeight)
-    local startX = 220
-    local sy = screenHeight - 70
-    local slots = { "weapon", "armor", "accessory" }
-    for i, slot in ipairs(slots) do
-        local tx = startX + (i - 1) * 95
-        if mx >= tx and mx <= tx + 85 and my >= sy and my <= sy + 55 then
-            return slot
-        end
-    end
-    return nil
-end
-
 function UI.GetTitleButtonAt(mx, my, screenWidth, screenHeight)
-    local x = screenWidth / 2 - 130
-    local y = screenHeight / 2 + 20
-    if PointInRect(mx, my, x, y, 260, 64) then
+    local r = UI._titleBtnRect
+    if r and PointInRect(mx, my, r.x, r.y, r.w, r.h) then
         return "start"
-    end
-    return nil
-end
-
-function UI.GetLevelCardAt(mx, my, screenWidth, screenHeight, levels)
-    local cardWidth = 320
-    local cardHeight = 250
-    local gap = 24
-    local totalWidth = (#levels * cardWidth) + ((#levels - 1) * gap)
-    local startX = (screenWidth - totalWidth) / 2
-    local startY = 200
-
-    for i, level in ipairs(levels) do
-        local x = startX + (i - 1) * (cardWidth + gap)
-        if PointInRect(mx, my, x, startY, cardWidth, cardHeight) then
-            return level.id
-        end
-    end
-    return nil
-end
-
-function UI.GetLevelSelectButtonAt(mx, my, screenWidth, screenHeight)
-    if PointInRect(mx, my, 40, 40, 120, 42) then
-        return "back"
     end
     return nil
 end

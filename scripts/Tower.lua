@@ -3,6 +3,47 @@ local Tower = {}
 Tower.list = {}
 Tower.selected = nil
 
+-- 弓箭塔精灵图资源
+Tower.sprites = {
+    building = nil,    -- 塔建筑图 128x256
+    archerIdle = nil,  -- 弓箭手待机序列 1152x192, 6帧, 每帧192x192
+    archerAttack = nil, -- 弓箭手射箭序列 1536x192, 8帧, 每帧192x192
+    idleCols = 6,
+    attackCols = 8,
+    frameW = 192,
+    frameH = 192,
+    sheetIdleW = 1152,
+    sheetAttackW = 1536,
+    sheetH = 192,
+    buildingW = 128,
+    buildingH = 256,
+}
+
+--- 加载弓箭塔精灵图资源
+function Tower.LoadSprites(nvg)
+    local sp = Tower.sprites
+    if not sp.building then
+        sp.building = nvgCreateImage(nvg, "image/archer_tower_building.png", 0)
+        sp.archerIdle = nvgCreateImage(nvg, "image/archer_idle_sheet.png", 0)
+        sp.archerAttack = nvgCreateImage(nvg, "image/archer_attack_sheet.png", 0)
+        print("[Tower] Archer tower sprites loaded")
+    end
+end
+
+--- 清理弓箭塔精灵图资源
+function Tower.CleanupSprites(nvg)
+    local sp = Tower.sprites
+    if nvg then
+        if sp.building and sp.building > 0 then nvgDeleteImage(nvg, sp.building) end
+        if sp.archerIdle and sp.archerIdle > 0 then nvgDeleteImage(nvg, sp.archerIdle) end
+        if sp.archerAttack and sp.archerAttack > 0 then nvgDeleteImage(nvg, sp.archerAttack) end
+    end
+    sp.building = nil
+    sp.archerIdle = nil
+    sp.archerAttack = nil
+    print("[Tower] Archer tower sprites cleaned up")
+end
+
 Tower.types = {
     archer_tower = {
         name = "弓箭塔", cost = 50, damage = 20, range = 160,
@@ -40,6 +81,12 @@ function Tower.Create(typeName, x, y, gold)
         _warCryATK = 0, _warCryTimer = 0,
         damage = config.damage,
         range = config.range,
+        -- 弓箭手动画状态
+        archerAnim = "idle",    -- "idle" 或 "attack"
+        archerFrame = 0,
+        archerFrameTimer = 0,
+        archerAttackTimer = 0,  -- 射击动画剩余时间
+        archerFacing = 1,       -- 1=右, -1=左
     }
     table.insert(Tower.list, tower)
     return tower, gold
@@ -67,6 +114,27 @@ function Tower.Update(tower, dt)
         tower._warCryATK = 0
     end
 
+    -- 更新弓箭手动画帧
+    if tower.type == "archer_tower" then
+        local frameTime = 0.12
+        tower.archerFrameTimer = tower.archerFrameTimer + dt
+        if tower.archerFrameTimer >= frameTime then
+            tower.archerFrameTimer = tower.archerFrameTimer - frameTime
+            if tower.archerAnim == "attack" then
+                tower.archerFrame = tower.archerFrame + 1
+                if tower.archerFrame >= Tower.sprites.attackCols then
+                    tower.archerFrame = 0
+                    tower.archerAnim = "idle"
+                end
+            else
+                tower.archerFrame = (tower.archerFrame + 1) % Tower.sprites.idleCols
+            end
+        end
+        if tower.archerAttackTimer > 0 then
+            tower.archerAttackTimer = tower.archerAttackTimer - dt
+        end
+    end
+
     local closest = nil
     local closestDist = tower.range
     for _, enemy in ipairs(Enemy.list) do
@@ -85,19 +153,39 @@ function Tower.Update(tower, dt)
         tower.cooldown = 1.0 / tower.config.fireRate
         local dmg = tower.damage * (1 + tower._warCryATK)
 
+        -- 弓箭塔开火时切换射击动画和朝向
+        if tower.type == "archer_tower" then
+            tower.archerAnim = "attack"
+            tower.archerFrame = 0
+            tower.archerFrameTimer = 0
+            tower.archerFacing = (closest.x >= tower.x) and 1 or -1
+        end
+
+        -- 计算发射起点（弓箭塔从弓箭手身体中心发射）
+        local fireX, fireY = tower.x, tower.y
+        if tower.type == "archer_tower" then
+            local sp = Tower.sprites
+            local bldScale = 0.45
+            local bldH = sp.buildingH * bldScale
+            local bldY = tower.y - bldH + bldH * 0.3
+            fireY = bldY + bldH * 0.1 + 25  -- 与 DrawArcherTower 中 archerCenterY 一致
+        end
+
         if tower.config.chain then
             local reward, kills = Tower.ChainLightning(tower, closest, dmg)
             totalReward = totalReward + reward
             totalKills = totalKills + kills
         elseif Projectile then
             Projectile.Create(
-                tower.x, tower.y, closest, dmg,
+                fireX, fireY, closest, dmg,
                 tower.config.projectileSpeed,
                 tower.config.color,
                 tower.config.slow or false,
                 tower.config.slowDuration or 0,
                 tower.config.slowFactor or 1.0,
-                tower.config.splash or 0
+                tower.config.splash or 0,
+                nil,                              -- source
+                tower.type == "archer_tower"       -- isArrow
             )
         end
     end
@@ -174,27 +262,7 @@ function Tower.DrawAll(nvg)
 end
 
 function Tower.Draw(nvg, tower)
-    local c = tower.config.color
-
-    nvgFillColor(nvg, nvgRGBA(60, 60, 60, 255))
-    nvgBeginPath(nvg)
-    nvgCircle(nvg, tower.x, tower.y, tower.config.size + 6)
-    nvgFill(nvg)
-
-    nvgFillColor(nvg, nvgRGBA(c[1], c[2], c[3], 255))
-    nvgBeginPath(nvg)
-    nvgCircle(nvg, tower.x, tower.y, tower.config.size)
-    nvgFill(nvg)
-
-    nvgStrokeColor(nvg, nvgRGBA(255, 255, 255, 180))
-    nvgStrokeWidth(nvg, 2)
-    nvgBeginPath(nvg)
-    nvgMoveTo(nvg, tower.x - 8, tower.y)
-    nvgLineTo(nvg, tower.x + 8, tower.y)
-    nvgMoveTo(nvg, tower.x, tower.y - 8)
-    nvgLineTo(nvg, tower.x, tower.y + 8)
-    nvgStroke(nvg)
-
+    -- 选中时显示攻击范围
     if Tower.selected == tower then
         nvgStrokeColor(nvg, nvgRGBA(255, 240, 140, 255))
         nvgStrokeWidth(nvg, 3)
@@ -203,10 +271,98 @@ function Tower.Draw(nvg, tower)
         nvgStroke(nvg)
     end
 
+    -- 弓箭塔：精灵图渲染
+    if tower.type == "archer_tower" then
+        Tower.DrawArcherTower(nvg, tower)
+    else
+        -- 其他塔：保持原有圆形绘制
+        local c = tower.config.color
+
+        nvgFillColor(nvg, nvgRGBA(60, 60, 60, 255))
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, tower.x, tower.y, tower.config.size + 6)
+        nvgFill(nvg)
+
+        nvgFillColor(nvg, nvgRGBA(c[1], c[2], c[3], 255))
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, tower.x, tower.y, tower.config.size)
+        nvgFill(nvg)
+
+        nvgStrokeColor(nvg, nvgRGBA(255, 255, 255, 180))
+        nvgStrokeWidth(nvg, 2)
+        nvgBeginPath(nvg)
+        nvgMoveTo(nvg, tower.x - 8, tower.y)
+        nvgLineTo(nvg, tower.x + 8, tower.y)
+        nvgMoveTo(nvg, tower.x, tower.y - 8)
+        nvgLineTo(nvg, tower.x, tower.y + 8)
+        nvgStroke(nvg)
+    end
+
+    -- 等级标签
     nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
     nvgFontSize(nvg, 10)
     nvgTextAlign(nvg, 1)
     nvgText(nvg, tower.x, tower.y + 4, "Lv" .. tower.level)
+end
+
+function Tower.DrawArcherTower(nvg, tower)
+    local sp = Tower.sprites
+    if not sp.building or sp.building <= 0 then return end
+
+    -- 绘制塔建筑（128x256 原图，缩放到合适大小）
+    local bldScale = 0.45
+    local bldW = sp.buildingW * bldScale
+    local bldH = sp.buildingH * bldScale
+    -- tower.x/y 是塔的放置中心点，建筑底部对齐到该点
+    local bldX = tower.x - bldW / 2
+    local bldY = tower.y - bldH + bldH * 0.3  -- 底部略偏上，让点击点在建筑中下部
+
+    local bldPaint = nvgImagePattern(nvg, bldX, bldY, bldW, bldH, 0, sp.building, 1.0)
+    nvgBeginPath(nvg)
+    nvgRect(nvg, bldX, bldY, bldW, bldH)
+    nvgFillPaint(nvg, bldPaint)
+    nvgFill(nvg)
+
+    -- 绘制弓箭手（在塔顶部）
+    local archerScale = 0.35
+    local archerW = sp.frameW * archerScale
+    local archerH = sp.frameH * archerScale
+    -- 弓箭手居中放在塔顶部
+    local archerCenterX = tower.x
+    local archerCenterY = bldY + bldH * 0.1 + 25
+
+    local isAttack = (tower.archerAnim == "attack")
+    local imgHandle = isAttack and sp.archerAttack or sp.archerIdle
+    local sheetW = isAttack and sp.sheetAttackW or sp.sheetIdleW
+    local col = tower.archerFrame
+
+    if not imgHandle or imgHandle <= 0 then return end
+
+    local sx = col * sp.frameW
+    local drawX = archerCenterX - archerW / 2
+    local drawY = archerCenterY - archerH / 2
+
+    nvgSave(nvg)
+
+    -- 镜像：面朝左时翻转
+    if tower.archerFacing < 0 then
+        nvgTranslate(nvg, archerCenterX, archerCenterY)
+        nvgScale(nvg, -1, 1)
+        nvgTranslate(nvg, -archerCenterX, -archerCenterY)
+    end
+
+    local patternX = drawX - sx * archerScale
+    local patternY = drawY
+    local patternW = sheetW * archerScale
+    local patternH = sp.sheetH * archerScale
+
+    local paint = nvgImagePattern(nvg, patternX, patternY, patternW, patternH, 0, imgHandle, 1.0)
+    nvgBeginPath(nvg)
+    nvgRect(nvg, drawX, drawY, archerW, archerH)
+    nvgFillPaint(nvg, paint)
+    nvgFill(nvg)
+
+    nvgRestore(nvg)
 end
 
 function Tower.SelectAt(x, y)

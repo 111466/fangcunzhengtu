@@ -1,4 +1,7 @@
 
+-- Path 模块已移除（大地图模式不再使用路径），保留桩以兼容旧逻辑
+local Path = { routes = {}, GetPosition = function() return 0, 0 end, GetRouteLength = function() return 1 end, RandomRoute = function() return {} end }
+
 local Enemy = {}
 Enemy.list = {}
 
@@ -123,7 +126,7 @@ function Enemy.Update(enemy, dt, heroState)
         end
     end
 
-    if enemy.progress &gt;= 1.0 then
+    if enemy.progress >= 1.0 then
         enemy.alive = false
         return -1
     end
