@@ -37,126 +37,184 @@ function UI.DrawTitleScreen(nvg, screenWidth, screenHeight)
     local cx = screenWidth / 2
     local cy = screenHeight / 2
     local isMobile = UI.isMobile
-    -- 响应式缩放因子：基准 720p 宽度
     local sf = math.max(0.55, math.min(1.0, screenWidth / 1280))
 
-    -- 全屏背景渐变
+    -- ===== 背景层 =====
+    -- 多层渐变背景（深蓝到紫蓝）
     local bgGrad = nvgLinearGradient(nvg, 0, 0, 0, screenHeight,
-        nvgRGBA(18, 28, 48, 255), nvgRGBA(35, 55, 85, 255))
+        nvgRGBA(12, 18, 35, 255), nvgRGBA(25, 35, 65, 255),
+        nvgRGBA(35, 45, 85, 255), nvgRGBA(20, 30, 55, 255))
     nvgBeginPath(nvg)
     nvgRect(nvg, 0, 0, screenWidth, screenHeight)
     nvgFillPaint(nvg, bgGrad)
     nvgFill(nvg)
 
-    -- 装饰星星
+    -- 动态粒子星星（带闪烁效果）
+    local time = os.clock()
     math.randomseed(42)
-    for i = 1, 40 do
+    for i = 1, 60 do
         local sx = math.random() * screenWidth
-        local sy = math.random() * screenHeight * 0.7
-        local sr = 0.5 + math.random() * 1.5
-        local sa = 60 + math.floor(math.random() * 120)
+        local sy = math.random() * screenHeight * 0.8
+        local sr = 0.5 + math.random() * 2
+        local twinkle = math.sin(time * 2 + i * 0.5) * 0.5 + 0.5
+        local sa = math.floor((40 + math.random() * 80) * twinkle)
         nvgBeginPath(nvg)
         nvgCircle(nvg, sx, sy, sr)
-        nvgFillColor(nvg, nvgRGBA(200, 220, 255, sa))
+        nvgFillColor(nvg, nvgRGBA(220, 240, 255, sa))
         nvgFill(nvg)
     end
 
-    -- 中心面板
-    local panelW = math.min(500 * sf, screenWidth - 40)
-    local panelH = math.min(420 * sf, screenHeight - 40)
-    local panelX = cx - panelW / 2
-    local panelY = cy - panelH / 2
-
-    -- 面板背景（毛玻璃感）
-    local panelGrad = nvgLinearGradient(nvg, panelX, panelY, panelX, panelY + panelH,
-        nvgRGBA(45, 65, 110, 210), nvgRGBA(30, 45, 80, 230))
+    -- 远处山脉轮廓
+    nvgStrokeColor(nvg, nvgRGBA(60, 80, 120, 40))
+    nvgStrokeWidth(nvg, 2)
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, panelX, panelY, panelW, panelH, 20 * sf)
-    nvgFillPaint(nvg, panelGrad)
+    nvgMoveTo(nvg, 0, screenHeight * 0.6)
+    local peakCount = 8
+    for i = 0, peakCount do
+        local px = (i / peakCount) * screenWidth
+        local py = screenHeight * (0.55 + math.sin(i * 1.5) * 0.08 + math.random() * 0.03)
+        nvgLineTo(nvg, px, py)
+    end
+    nvgLineTo(nvg, screenWidth, screenHeight)
+    nvgLineTo(nvg, 0, screenHeight)
+    nvgClosePath(nvg)
+    nvgFillColor(nvg, nvgRGBA(30, 45, 75, 60))
     nvgFill(nvg)
 
-    -- 面板边框光晕
-    nvgStrokeColor(nvg, nvgRGBA(120, 170, 255, 80))
-    nvgStrokeWidth(nvg, 1.5)
+    -- ===== 中心装饰圆环 =====
+    local ringRadius = math.min(screenWidth, screenHeight) * 0.22
+    local ringX = cx
+    local ringY = cy - 30 * sf
+
+    -- 外层光环
+    nvgStrokeColor(nvg, nvgRGBA(100, 150, 255, 30))
+    nvgStrokeWidth(nvg, 2)
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, panelX, panelY, panelW, panelH, 20 * sf)
+    nvgCircle(nvg, ringX, ringY, ringRadius)
     nvgStroke(nvg)
 
-    -- 标题
-    nvgTextAlign(nvg, 1) -- NVG_ALIGN_CENTER
-    local titleSize = math.floor(44 * sf)
+    -- 内层光环
+    nvgStrokeColor(nvg, nvgRGBA(150, 180, 255, 40))
+    nvgStrokeWidth(nvg, 1)
+    nvgBeginPath(nvg)
+    nvgCircle(nvg, ringX, ringY, ringRadius * 0.85)
+    nvgStroke(nvg)
+
+    -- 四角装饰星点
+    local starAngle = time * 0.2
+    for i = 0, 3 do
+        local angle = starAngle + i * math.pi / 2
+        local px = ringX + math.cos(angle) * ringRadius * 0.92
+        local py = ringY + math.sin(angle) * ringRadius * 0.92
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, px, py, 4 * sf)
+        nvgFillColor(nvg, nvgRGBA(255, 220, 150, 180))
+        nvgFill(nvg)
+    end
+
+    -- ===== 标题文字 =====
+    nvgTextAlign(nvg, 1)
+
+    -- 主标题：方寸征途
+    local titleSize = math.floor(52 * sf)
     nvgFontSize(nvg, titleSize)
-    nvgFillColor(nvg, nvgRGBA(255, 230, 180, 255))
-    local titleY = panelY + 55 * sf
-    nvgText(nvg, cx, titleY, "Tiny Swords")
+    -- 金色渐变文字
+    local titleGrad = nvgLinearGradient(nvg, cx - 150, ringY - 30, cx + 150, ringY + 30,
+        nvgRGBA(255, 230, 150, 255), nvgRGBA(255, 210, 100, 255), nvgRGBA(255, 230, 150, 255))
+    nvgFillPaint(nvg, titleGrad)
+    nvgText(nvg, cx, ringY + 15 * sf, "方寸征途")
+
+    -- 标题光晕效果
+    nvgFillColor(nvg, nvgRGBA(255, 220, 100, 30))
+    nvgFontSize(nvg, titleSize + 8)
+    nvgText(nvg, cx, ringY + 15 * sf, "方寸征途")
 
     -- 副标题
-    local subSize = math.floor(20 * sf)
+    local subSize = math.floor(18 * sf)
     nvgFontSize(nvg, subSize)
-    nvgFillColor(nvg, nvgRGBA(180, 210, 255, 230))
-    nvgText(nvg, cx, titleY + 36 * sf, "大地图探索 · 攻城略地")
+    nvgFillColor(nvg, nvgRGBA(160, 195, 240, 220))
+    nvgText(nvg, cx, ringY + 55 * sf, "战略征途 · 征战四方")
 
-    -- 描述
-    local descSize = math.floor(14 * sf)
+    -- 描述文字
+    local descSize = math.floor(13 * sf)
     nvgFontSize(nvg, descSize)
-    nvgFillColor(nvg, nvgRGBA(170, 190, 220, 200))
-    nvgText(nvg, cx, titleY + 72 * sf, "探索广袤世界，建造营地，征服据点")
+    nvgFillColor(nvg, nvgRGBA(150, 180, 215, 180))
+    nvgText(nvg, cx, ringY + 85 * sf, "策略布局，征战天下，成就一方霸业")
 
-    -- 开始按钮（大按钮，触屏友好）
-    local btnW = math.floor(220 * sf)
-    local btnH = math.floor(56 * sf)
+    -- ===== 开始按钮 =====
+    local btnW = math.floor(240 * sf)
+    local btnH = math.floor(60 * sf)
     if isMobile then
-        btnW = math.floor(260 * sf)
-        btnH = math.floor(64 * sf)
+        btnW = math.floor(280 * sf)
+        btnH = math.floor(70 * sf)
     end
     local btnX = cx - btnW / 2
-    local btnY = panelY + panelH * 0.55
+    local btnY = ringY + 130 * sf
 
-    -- 按钮存储用于点击检测
     UI._titleBtnRect = { x = btnX, y = btnY, w = btnW, h = btnH }
 
-    -- 按钮渐变
-    local btnGrad = nvgLinearGradient(nvg, btnX, btnY, btnX, btnY + btnH,
-        nvgRGBA(80, 140, 255, 240), nvgRGBA(60, 110, 220, 240))
+    -- 按钮发光效果
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 12 * sf)
+    nvgRoundedRect(nvg, btnX - 5, btnY - 5, btnW + 10, btnH + 10, 16 * sf)
+    local glowGrad = nvgRadialGradient(nvg, cx, btnY + btnH / 2, 0, btnW * 0.8,
+        nvgRGBA(100, 160, 255, 60), nvgRGBA(100, 160, 255, 0))
+    nvgFillPaint(nvg, glowGrad)
+    nvgFill(nvg)
+
+    -- 按钮主体渐变
+    local btnGrad = nvgLinearGradient(nvg, btnX, btnY, btnX, btnY + btnH,
+        nvgRGBA(95, 155, 255, 255), nvgRGBA(65, 115, 220, 255))
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 14 * sf)
     nvgFillPaint(nvg, btnGrad)
     nvgFill(nvg)
 
-    -- 按钮高光
+    -- 按钮高光层
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, btnX + 1, btnY + 1, btnW - 2, btnH / 2, 12 * sf)
-    nvgFillColor(nvg, nvgRGBA(255, 255, 255, 25))
+    nvgRoundedRect(nvg, btnX + 2, btnY + 2, btnW - 4, btnH / 2.5, 12 * sf)
+    local highlightGrad = nvgLinearGradient(nvg, btnX, btnY, btnX, btnY + btnH / 2,
+        nvgRGBA(255, 255, 255, 35), nvgRGBA(255, 255, 255, 0))
+    nvgFillPaint(nvg, highlightGrad)
     nvgFill(nvg)
 
     -- 按钮边框
-    nvgStrokeColor(nvg, nvgRGBA(160, 200, 255, 150))
-    nvgStrokeWidth(nvg, 1.5)
+    nvgStrokeColor(nvg, nvgRGBA(180, 210, 255, 200))
+    nvgStrokeWidth(nvg, 2)
     nvgBeginPath(nvg)
-    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 12 * sf)
+    nvgRoundedRect(nvg, btnX, btnY, btnW, btnH, 14 * sf)
     nvgStroke(nvg)
 
     -- 按钮文字
     nvgTextAlign(nvg, 1)
     nvgFillColor(nvg, nvgRGBA(255, 255, 255, 255))
-    nvgFontSize(nvg, math.floor(20 * sf))
-    nvgText(nvg, cx, btnY + btnH / 2 + 7 * sf, "开始探索")
+    nvgFontSize(nvg, math.floor(22 * sf))
+    nvgText(nvg, cx, btnY + btnH / 2 + 8 * sf, "开始征程")
 
-    -- 操作提示
-    local hintY = btnY + btnH + 30 * sf
-    nvgFontSize(nvg, math.floor(13 * sf))
-    nvgFillColor(nvg, nvgRGBA(150, 175, 210, 180))
+    -- 按钮图标（小剑）
+    local swordSize = math.floor(18 * sf)
+    nvgStrokeColor(nvg, nvgRGBA(255, 255, 255, 220))
+    nvgStrokeWidth(nvg, 2)
+    nvgBeginPath(nvg)
+    nvgMoveTo(nvg, btnX + 35 * sf, btnY + btnH / 2 + swordSize)
+    nvgLineTo(nvg, btnX + 35 * sf, btnY + btnH / 2 - swordSize)
+    nvgLineTo(nvg, btnX + 35 * sf + swordSize * 0.7, btnY + btnH / 2 - swordSize * 0.5)
+    nvgStroke(nvg)
+
+    -- ===== 操作提示 =====
+    local hintY = btnY + btnH + 35 * sf
+    nvgFontSize(nvg, math.floor(12 * sf))
+    nvgFillColor(nvg, nvgRGBA(140, 170, 210, 170))
     if isMobile then
         nvgText(nvg, cx, hintY, "触屏点击开始  ·  虚拟摇杆移动  ·  按钮攻击")
     else
         nvgText(nvg, cx, hintY, "点击按钮或按 空格/回车 开始")
-        nvgText(nvg, cx, hintY + 20 * sf, "WASD 移动  ·  空格/左键攻击  ·  M 地图")
+        nvgText(nvg, cx, hintY + 18 * sf, "WASD 移动  ·  空格/左键攻击  ·  M 地图")
     end
 
-    -- 底部版本号
+    -- ===== 底部版本号 =====
     nvgFontSize(nvg, math.floor(11 * sf))
-    nvgFillColor(nvg, nvgRGBA(100, 130, 170, 120))
-    nvgText(nvg, cx, screenHeight - 12, "Tiny Swords v1.0")
+    nvgFillColor(nvg, nvgRGBA(90, 120, 160, 110))
+    nvgText(nvg, cx, screenHeight - 14, "方寸征途 v1.0")
 end
 
 function UI.DrawBattleHUD(nvg, gold, lives, heroState, screenWidth, screenHeight)
