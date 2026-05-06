@@ -43,7 +43,7 @@ Hero.config = {
     baseHP = 500,
     baseATK = 40,
     baseDEF = 15,
-    attackRange = 60,
+    attackRange = 40,
     attackSpeed = 1.5,
     attackCooldown = 0,
     maxMana = 100,
@@ -211,7 +211,7 @@ function Hero.Update(dt)
     end
 end
 
-function Hero.Attack(enemies)
+function Hero.Attack(enemies, guards)
     local s = Hero.state
     if not s.alive or s.attackCooldown > 0 then return 0, 0 end
 
@@ -223,9 +223,11 @@ function Hero.Attack(enemies)
     s.animState = "attack"
     s.animTimer = 0.25
 
-    -- 查找范围内最近的敌人
+    -- 查找范围内最近的目标（enemies + guards）
     local closest = nil
     local closestDist = Hero.config.attackRange
+    local closestIsGuard = false
+
     for _, enemy in ipairs(enemies) do
         if enemy.alive then
             local dx = enemy.x - s.x
@@ -234,15 +236,37 @@ function Hero.Attack(enemies)
             if dist < closestDist then
                 closestDist = dist
                 closest = enemy
+                closestIsGuard = false
+            end
+        end
+    end
+
+    if guards then
+        for _, guard in ipairs(guards) do
+            if guard.alive then
+                local dx = guard.x - s.x
+                local dy = guard.y - s.y
+                local dist = math.sqrt(dx*dx + dy*dy)
+                if dist < closestDist then
+                    closestDist = dist
+                    closest = guard
+                    closestIsGuard = true
+                end
             end
         end
     end
 
     if closest then
-        local reward = Enemy.Damage(closest, totalATK)
+        -- 对目标造成伤害
+        if closestIsGuard then
+            local Guard = require("scripts.Guard")
+            Guard.TakeDamage(closest, totalATK)
+        else
+            local reward = Enemy.Damage(closest, totalATK)
+        end
         s.totalDamage = s.totalDamage + totalATK
 
-        -- 更新朝向：面朝敌人
+        -- 更新朝向：面朝目标
         local adx = closest.x - s.x
         local ady = closest.y - s.y
         if math.abs(adx) >= math.abs(ady) then
@@ -271,8 +295,10 @@ function Hero.Attack(enemies)
             })
         end
 
-        Hero.ApplyDamageEffects(closest, totalATK)
-        return reward or 0, reward and 1 or 0
+        if not closestIsGuard then
+            Hero.ApplyDamageEffects(closest, totalATK)
+        end
+        return 0, 0
     end
     return 0, 0
 end

@@ -31,6 +31,11 @@ local territories_ = {}  -- { {x, y, radius} }
 local campPos_ = { x = 0, y = 0 }  -- 营地位置
 local warehousePos_ = { x = 0, y = 0 } -- 仓库位置（营地右侧）
 
+-- 敌方势力
+local enemyBasePos_ = { x = 0, y = 0 }
+local enemyTerritories_ = {}  -- { {x, y, radius} }
+local enemyBarracksPos_ = { x = 0, y = 0 }
+
 
 
 ----------------------------------------------------------------------
@@ -44,16 +49,25 @@ local function PseudoRandom(seed)
     return seed, (seed % 10000) / 10000.0
 end
 
---- 判断点是否靠近营地或仓库
+--- 判断点是否靠近营地、仓库或敌方城堡
 local function IsNearCamp(x, y, threshold)
     threshold = threshold or 120
+    local t2 = threshold * threshold
     local dx = x - campPos_.x
     local dy = y - campPos_.y
-    if dx*dx + dy*dy < threshold * threshold then return true end
+    if dx*dx + dy*dy < t2 then return true end
     -- 也检查仓库区域
     local wx = x - warehousePos_.x
     local wy = y - warehousePos_.y
-    return wx*wx + wy*wy < threshold * threshold
+    if wx*wx + wy*wy < t2 then return true end
+    -- 也检查敌方城堡区域
+    local ex = x - enemyBasePos_.x
+    local ey = y - enemyBasePos_.y
+    if ex*ex + ey*ey < t2 then return true end
+    -- 也检查敌方兵营区域
+    local bx = x - enemyBarracksPos_.x
+    local by = y - enemyBarracksPos_.y
+    return bx*bx + by*by < t2
 end
 
 --- 判断生物群落类型
@@ -161,6 +175,18 @@ function Map.Init(nvg)
     }
     print("[Map] Camp at (" .. campPos_.x .. ", " .. campPos_.y .. "), territory radius=" .. Config.TERRITORY_RADIUS)
 
+    -- 初始化敌方势力
+    enemyBasePos_.x = Config.ENEMY_BASE.x
+    enemyBasePos_.y = Config.ENEMY_BASE.y
+    enemyTerritories_ = {
+        { x = enemyBasePos_.x, y = enemyBasePos_.y, radius = Config.ENEMY_TERRITORY_RADIUS }
+    }
+    -- 初始化敌方兵营位置
+    enemyBarracksPos_.x = enemyBasePos_.x + Config.ENEMY_BARRACKS_OFFSET.x
+    enemyBarracksPos_.y = enemyBasePos_.y + Config.ENEMY_BARRACKS_OFFSET.y
+    print("[Map] Enemy base at (" .. enemyBasePos_.x .. ", " .. enemyBasePos_.y .. "), territory radius=" .. Config.ENEMY_TERRITORY_RADIUS)
+    print("[Map] Enemy barracks at (" .. enemyBarracksPos_.x .. ", " .. enemyBarracksPos_.y .. ")")
+
     local repeatFlags = NVG_IMAGE_REPEATX | NVG_IMAGE_REPEATY
     images_.grass = nvgCreateImage(nvg, "image/grass_tile_20260505161428.png", repeatFlags)
 
@@ -172,6 +198,8 @@ function Map.Init(nvg)
     images_.camp = nvgCreateImage(nvg, "image/house_building.png", 0)
     images_.warehouse = nvgCreateImage(nvg, "image/warehouse_building.png", 0)
     images_.castle = nvgCreateImage(nvg, "image/castle.png", 0)
+    images_.enemy_castle = nvgCreateImage(nvg, "image/enemy_castle.png", 0)
+    images_.enemy_barracks = nvgCreateImage(nvg, "image/enemy_barracks.png", 0)
 
     -- 加载动画树精灵图
     for name, meta in pairs(treeMeta_) do
@@ -318,6 +346,68 @@ local function DrawTerritoryBorders(nvg)
     end
 end
 
+--- 绘制敌方领地边界圆圈（红色，与我方绿色区分）
+local function DrawEnemyTerritoryBorders(nvg)
+    for _, t in ipairs(enemyTerritories_) do
+        -- 敌方领地范围填充（极淡红色）
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, t.x, t.y, t.radius)
+        nvgFillColor(nvg, nvgRGBA(200, 60, 60, 18))
+        nvgFill(nvg)
+
+        -- 敌方领地边界线（红色）
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, t.x, t.y, t.radius)
+        nvgStrokeColor(nvg, nvgRGBA(200, 60, 60, 100))
+        nvgStrokeWidth(nvg, 2)
+        nvgStroke(nvg)
+
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, t.x, t.y, t.radius - 3)
+        nvgStrokeColor(nvg, nvgRGBA(200, 60, 60, 40))
+        nvgStrokeWidth(nvg, 1)
+        nvgStroke(nvg)
+    end
+end
+
+--- 绘制敌方城堡建筑精灵
+local function DrawEnemyCastle(nvg)
+    local img = images_.enemy_castle
+    if not img or img <= 0 then return end
+    if not Camera.IsVisible(enemyBasePos_.x, enemyBasePos_.y, 250) then return end
+
+    -- 敌方城堡与我方城堡同尺寸 200x160
+    local drawW = 200
+    local drawH = 160
+    local destX = enemyBasePos_.x - drawW / 2
+    local destY = enemyBasePos_.y - drawH / 2
+
+    local paint = nvgImagePattern(nvg, destX, destY, drawW, drawH, 0, img, 1.0)
+    nvgBeginPath(nvg)
+    nvgRect(nvg, destX, destY, drawW, drawH)
+    nvgFillPaint(nvg, paint)
+    nvgFill(nvg)
+end
+
+--- 绘制敌方兵营建筑精灵
+local function DrawEnemyBarracks(nvg)
+    local img = images_.enemy_barracks
+    if not img or img <= 0 then return end
+    if not Camera.IsVisible(enemyBarracksPos_.x, enemyBarracksPos_.y, 200) then return end
+
+    -- 兵营原始 192x256，绘制尺寸等比缩放
+    local drawW = 96
+    local drawH = 128  -- 96 * (256/192)
+    local destX = enemyBarracksPos_.x - drawW / 2
+    local destY = enemyBarracksPos_.y - drawH / 2
+
+    local paint = nvgImagePattern(nvg, destX, destY, drawW, drawH, 0, img, 1.0)
+    nvgBeginPath(nvg)
+    nvgRect(nvg, destX, destY, drawW, drawH)
+    nvgFillPaint(nvg, paint)
+    nvgFill(nvg)
+end
+
 --- 绘制营地建筑精灵
 local function DrawCamp(nvg)
     local img = images_.camp
@@ -385,6 +475,7 @@ function Map.DrawBackground(nvg, screenW, screenH)
 
     -- 2. 领地范围显示
     DrawTerritoryBorders(nvg)
+    DrawEnemyTerritoryBorders(nvg)
 
     -- 3. 世界边界
     DrawWorldBorder(nvg)
@@ -466,6 +557,33 @@ function Map.DrawCastleSprite(nvg)
     DrawCastle(nvg)
 end
 
+--- 获取敌方城堡位置
+---@return table {x, y}
+function Map.GetEnemyBasePos()
+    return enemyBasePos_
+end
+
+--- 绘制敌方城堡（供外部 Y 排序调用）
+---@param nvg NVGContextWrapper
+function Map.DrawEnemyCastleSprite(nvg)
+    DrawEnemyCastle(nvg)
+end
+
+--- 判断点是否在敌方领地范围内
+---@param x number 世界坐标 X
+---@param y number 世界坐标 Y
+---@return boolean
+function Map.IsInEnemyTerritory(x, y)
+    for _, t in ipairs(enemyTerritories_) do
+        local dx = x - t.x
+        local dy = y - t.y
+        if dx*dx + dy*dy <= t.radius * t.radius then
+            return true
+        end
+    end
+    return false
+end
+
 --- 获取仓库位置
 ---@return table {x, y}
 function Map.GetWarehousePos()
@@ -476,6 +594,18 @@ end
 ---@param nvg NVGContextWrapper
 function Map.DrawWarehouseSprite(nvg)
     DrawWarehouse(nvg)
+end
+
+--- 获取敌方兵营位置
+---@return table {x, y}
+function Map.GetEnemyBarracksPos()
+    return enemyBarracksPos_
+end
+
+--- 绘制敌方兵营（供外部 Y 排序调用）
+---@param nvg NVGContextWrapper
+function Map.DrawEnemyBarracksSprite(nvg)
+    DrawEnemyBarracks(nvg)
 end
 
 --- 清理资源

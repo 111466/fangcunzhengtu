@@ -14,6 +14,7 @@ WaveManager = require("scripts.WaveManager")
 InputController = require("scripts.InputController")
 UI = require("scripts.UI")
 Follower = require("scripts.Follower")
+Guard = require("scripts.Guard")
 
 local gold_ = Config.INITIAL_GOLD
 local lives_ = Config.INITIAL_LIVES
@@ -28,6 +29,13 @@ local territoryWarning_ = {
     active = false,
     timer = 0,           -- 显示倒计时
     DURATION = 2.5,      -- 提示持续秒数
+}
+
+-- 进入敌方领地提示
+local enemyTerritoryWarning_ = {
+    active = false,
+    timer = 0,
+    DURATION = 2.5,
 }
 
 local function AddBattleRewards(reward, kills)
@@ -49,6 +57,7 @@ local function ResetBattleObjects()
     Follower.list = {}
     Follower.woodCount = 0
     Follower.woodAnims = {}
+    Guard.Reset()
     InputController.Reset()
 end
 
@@ -86,6 +95,11 @@ local function StartGame()
     -- 创建初始随从（在英雄旁边）
     Follower.Create(heroX + 50, heroY + 25)
 
+    -- 创建敌方兵营前的两个守卫（兵营下方左右站立，面向右）
+    local barracksPos = Map.GetEnemyBarracksPos()
+    Guard.Create(barracksPos.x - 25, barracksPos.y + 65, "right")
+    Guard.Create(barracksPos.x + 25, barracksPos.y + 65, "right")
+
     -- 禁用敌人波次（大地图模式暂不使用）
     WaveManager.Init(nil)
     WaveManager.allComplete = true
@@ -110,6 +124,7 @@ function Start()
     Tower.LoadSprites(nvg_)
     Projectile.LoadSprites(nvg_)
     Follower.LoadSprites(nvg_)
+    Guard.LoadSprites(nvg_)
 
     gold_ = Config.INITIAL_GOLD
     lives_ = Config.INITIAL_LIVES
@@ -159,6 +174,8 @@ function HandleTouchBegin(eventType, eventData)
     end
 
     -- 先检查小地图
+    print(string.format("[Touch] x=%.0f y=%.0f sw=%.0f sh=%.0f hit=%s",
+        x, y, screenWidth, screenHeight, tostring(Minimap.HitTest(x, y, screenWidth, screenHeight))))
     if Minimap.HandleClick(x, y, screenWidth, screenHeight) then
         return
     end
@@ -279,9 +296,24 @@ function HandleUpdate(eventType, eventData)
         end
     end
 
+    -- 进入敌方领地检测
+    local wasInEnemy = Map.IsInEnemyTerritory(Hero.state.x - Hero.state.vx * dt * 200, Hero.state.y - Hero.state.vy * dt * 200)
+    local isInEnemy = Map.IsInEnemyTerritory(Hero.state.x, Hero.state.y)
+    if not wasInEnemy and isInEnemy then
+        enemyTerritoryWarning_.active = true
+        enemyTerritoryWarning_.timer = enemyTerritoryWarning_.DURATION
+    end
+    if enemyTerritoryWarning_.timer > 0 then
+        enemyTerritoryWarning_.timer = enemyTerritoryWarning_.timer - dt
+        if enemyTerritoryWarning_.timer <= 0 then
+            enemyTerritoryWarning_.active = false
+            enemyTerritoryWarning_.timer = 0
+        end
+    end
+
     if InputController.state.attacking then
         -- 暂无敌人，但攻击动画仍可播放
-        local reward, kills = Hero.Attack(Enemy and Enemy.list or {})
+        local reward, kills = Hero.Attack(Enemy and Enemy.list or {}, Guard.GetList())
         AddBattleRewards(reward, kills)
     end
 
@@ -314,8 +346,17 @@ function HandleUpdate(eventType, eventData)
 
     Particle.UpdateAll(dt)
 
-    -- 更新随从
-    Follower.Update(dt, Hero.state, Enemy and Enemy.list or {})
+    -- 更新随从（传入守卫列表，让随从能自动攻击守卫）
+    Follower.Update(dt, Hero.state, Enemy and Enemy.list or {}, Guard.GetList())
+
+    -- 更新守卫（传入英雄和随从，让守卫追击攻击）
+    Guard.Update(dt, Hero.state, Follower.list)
+
+    -- 处理守卫对英雄的待处理伤害
+    local pendingDmg = Guard.FlushPendingDamage()
+    for _, dmgInfo in ipairs(pendingDmg) do
+        Hero.TakeDamage(dmgInfo.amount, dmgInfo.guard)
+    end
 
     -- 更新地图动画
     Map.Update(dt)
@@ -357,11 +398,22 @@ function HandleNanoVGRender(eventType, eventData)
 
 
 
-        -- 城堡建筑（领地中心）
+        -- 我方城堡建筑（领地中心）
         local castlePos = Map.GetCampPos()
         if Camera.IsVisible(castlePos.x, castlePos.y, 250) then
-            -- 城堡绘制高度 160，底部 Y = campPos.y + 80
             table.insert(drawables, { y = castlePos.y + 80, kind = "castle" })
+        end
+
+        -- 敌方城堡建筑（左上角）
+        local enemyPos = Map.GetEnemyBasePos()
+        if Camera.IsVisible(enemyPos.x, enemyPos.y, 250) then
+            table.insert(drawables, { y = enemyPos.y + 80, kind = "enemy_castle" })
+        end
+
+        -- 敌方兵营建筑
+        local barracksPos = Map.GetEnemyBarracksPos()
+        if Camera.IsVisible(barracksPos.x, barracksPos.y, 200) then
+            table.insert(drawables, { y = barracksPos.y + 64, kind = "enemy_barracks" })
         end
 
         for _, tower in ipairs(Tower.list) do
@@ -382,6 +434,11 @@ function HandleNanoVGRender(eventType, eventData)
                 table.insert(drawables, { y = follower.y, kind = "follower", obj = follower })
             end
         end
+        for _, guard in ipairs(Guard.GetList()) do
+            if guard.alive and Camera.IsVisible(guard.x, guard.y, 100) then
+                table.insert(drawables, { y = guard.y, kind = "guard", obj = guard })
+            end
+        end
 
         table.sort(drawables, function(a, b) return a.y < b.y end)
 
@@ -390,6 +447,12 @@ function HandleNanoVGRender(eventType, eventData)
                 Map.DrawDecoration(nvg_, d.obj, d.index, Follower.DrawStump)
             elseif d.kind == "castle" then
                 Map.DrawCastleSprite(nvg_)
+            elseif d.kind == "enemy_castle" then
+                Map.DrawEnemyCastleSprite(nvg_)
+            elseif d.kind == "enemy_barracks" then
+                Map.DrawEnemyBarracksSprite(nvg_)
+            elseif d.kind == "guard" then
+                Guard.Draw(nvg_, d.obj)
             elseif d.kind == "hero" then
                 Hero.Draw(nvg_)
             elseif d.kind == "follower" then
@@ -435,6 +498,21 @@ function HandleNanoVGRender(eventType, eventData)
             nvgText(nvg_, screenWidth / 2, 102, "你已离开领地范围，注意安全！")
         end
 
+        -- 进入敌方领地警告
+        if enemyTerritoryWarning_.active and enemyTerritoryWarning_.timer > 0 then
+            local alpha = math.min(1.0, enemyTerritoryWarning_.timer / 0.5) * 255
+            -- 背景条（深红色）
+            nvgBeginPath(nvg_)
+            nvgRoundedRect(nvg_, screenWidth / 2 - 180, 130, 360, 44, 8)
+            nvgFillColor(nvg_, nvgRGBA(150, 20, 20, math.floor(alpha * 0.8)))
+            nvgFill(nvg_)
+            -- 文字
+            nvgFontSize(nvg_, 20)
+            nvgTextAlign(nvg_, 18)
+            nvgFillColor(nvg_, nvgRGBA(255, 200, 200, math.floor(alpha)))
+            nvgText(nvg_, screenWidth / 2, 152, "你已进入敌方领地，小心！")
+        end
+
         -- 移动端虚拟控件
         UI.DrawTouchControls(nvg_, screenWidth, screenHeight)
 
@@ -462,6 +540,7 @@ function HandleNanoVGRender(eventType, eventData)
 end
 
 function Stop()
+    Guard.CleanupSprites(nvg_)
     Follower.CleanupSprites(nvg_)
     Projectile.CleanupSprites(nvg_)
     Tower.CleanupSprites(nvg_)

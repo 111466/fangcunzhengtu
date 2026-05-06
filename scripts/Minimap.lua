@@ -76,6 +76,8 @@ end
 ---@return boolean consumed
 function Minimap.HandleClick(mx, my, screenW, screenH)
     local rx, ry, rw, rh = GetRect(screenW, screenH)
+    print(string.format("[Minimap] click(%.0f,%.0f) rect(%.0f,%.0f,%.0f,%.0f) expanded=%s",
+        mx, my, rx, ry, rw, rh, tostring(expanded_)))
 
     -- 不在小地图内 → 若展开则关闭
     if not Minimap.HitTest(mx, my, screenW, screenH) then
@@ -173,6 +175,35 @@ function Minimap.Draw(nvg, screenW, screenH, heroState)
         nvgStrokeColor(nvg, nvgRGBA(80, 200, 80, 150))
         nvgStrokeWidth(nvg, expanded_ and 1.5 or 1)
         nvgStroke(nvg)
+    end
+
+    -- 2.5 敌方领地范围（红色）
+    local enemyPos = Map.GetEnemyBasePos()
+    if enemyPos then
+        local eRadius = Config.ENEMY_TERRITORY_RADIUS
+        local ex = rx + enemyPos.x * scaleX
+        local ey = ry + enemyPos.y * scaleY
+        local er = eRadius * math.min(scaleX, scaleY)
+
+        -- 敌方领地填充
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, ex, ey, er)
+        nvgFillColor(nvg, nvgRGBA(200, 60, 60, 30))
+        nvgFill(nvg)
+
+        -- 敌方领地边界
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, ex, ey, er)
+        nvgStrokeColor(nvg, nvgRGBA(200, 60, 60, 150))
+        nvgStrokeWidth(nvg, expanded_ and 1.5 or 1)
+        nvgStroke(nvg)
+
+        -- 敌方城堡标记（红色方块）
+        local castleSize = expanded_ and 6 or 4
+        nvgBeginPath(nvg)
+        nvgRect(nvg, ex - castleSize / 2, ey - castleSize / 2, castleSize, castleSize)
+        nvgFillColor(nvg, nvgRGBA(220, 50, 50, 255))
+        nvgFill(nvg)
     end
 
     -- 3. 防御塔位置（如果有）

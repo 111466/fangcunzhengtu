@@ -92,15 +92,19 @@ function Follower.Create(x, y)
         targetTreeY = 0,
 
         -- 动画
-        animKey = "walk_right", -- 当前精灵表 key
+        animKey = "walk_right", -- 当前精灵表 key（待机用walk）
         animFrame = 0,
         animTimer = 0,
         animPlaying = false,    -- 攻击/砍树动画播放标记
 
+        -- 生命值
+        hp = 200,
+        maxHP = 200,
+
         -- 攻击
         attackCooldown = 0,
         attackDamage = 25,
-        attackRange = 55,
+        attackRange = 35,
         attackSpeed = 1.2,      -- 每秒攻击次数
 
         -- 移动
@@ -190,26 +194,47 @@ end
 -- AI 更新
 ----------------------------------------------------------------------
 
-local function FindNearestEnemy(f, enemies)
-    if not enemies then return nil end
+--- 查找最近的敌人（包括 Enemy 和 Guard）
+---@return table|nil target, string|nil type ("enemy"|"guard")
+local function FindNearestEnemy(f, enemies, guards)
     local closest = nil
     local closestDist = 200   -- 索敌范围
-    for _, e in ipairs(enemies) do
-        if e.alive then
-            local d = Dist(f.x, f.y, e.x, e.y)
-            if d < closestDist then
-                closestDist = d
-                closest = e
+    local closestType = nil
+
+    if enemies then
+        for _, e in ipairs(enemies) do
+            if e.alive then
+                local d = Dist(f.x, f.y, e.x, e.y)
+                if d < closestDist then
+                    closestDist = d
+                    closest = e
+                    closestType = "enemy"
+                end
             end
         end
     end
-    return closest
+
+    if guards then
+        for _, g in ipairs(guards) do
+            if g.alive then
+                local d = Dist(f.x, f.y, g.x, g.y)
+                if d < closestDist then
+                    closestDist = d
+                    closest = g
+                    closestType = "guard"
+                end
+            end
+        end
+    end
+
+    return closest, closestType
 end
 
-function Follower.Update(dt, heroState, enemies)
-    for _, f in ipairs(Follower.list) do
+function Follower.Update(dt, heroState, enemies, guards)
+    for i = #Follower.list, 1, -1 do
+        local f = Follower.list[i]
         if f.alive then
-            Follower._UpdateOne(f, dt, heroState, enemies)
+            Follower._UpdateOne(f, dt, heroState, enemies, guards)
         end
     end
 
@@ -230,7 +255,7 @@ function Follower.Update(dt, heroState, enemies)
     end
 end
 
-function Follower._UpdateOne(f, dt, heroState, enemies)
+function Follower._UpdateOne(f, dt, heroState, enemies, guards)
     -- 减少冷却
     if f.attackCooldown > 0 then f.attackCooldown = f.attackCooldown - dt end
     if f.chopCooldown > 0 then f.chopCooldown = f.chopCooldown - dt end
@@ -268,7 +293,7 @@ function Follower._UpdateOne(f, dt, heroState, enemies)
             return
         end
         UpdateFacing(f, f.targetTreeX, f.targetTreeY)
-        f.animKey = GetAnimKey("walk", f.facing)
+        f.animKey = GetAnimKey("sword", f.facing)
         local arrived = MoveToward(f, f.targetTreeX, f.targetTreeY, f.moveSpeed, dt)
         if arrived or Dist(f.x, f.y, f.targetTreeX, f.targetTreeY) < 10 then
             f.aiState = "chop"
@@ -303,24 +328,30 @@ function Follower._UpdateOne(f, dt, heroState, enemies)
         return
     end
 
-    -- 检测敌人（优先于跟随）
-    local enemy = FindNearestEnemy(f, enemies)
+    -- 检测敌人（优先于跟随），同时检测 Guard
+    local enemy, enemyType = FindNearestEnemy(f, enemies, guards)
     if enemy then
         local eDist = Dist(f.x, f.y, enemy.x, enemy.y)
         if eDist <= f.attackRange then
             -- 攻击
             f.aiState = "attack"
             UpdateFacing(f, enemy.x, enemy.y)
-            f.animKey = GetAnimKey("sword", f.facing)
+            f.animKey = GetAnimKey("skill", f.facing)
             if f.attackCooldown <= 0 then
                 f.attackCooldown = 1.0 / f.attackSpeed
                 f.animFrame = 0
                 f.animPlaying = true
                 -- 造成伤害
                 if enemy.alive then
-                    enemy.hp = enemy.hp - f.attackDamage
-                    if enemy.hp <= 0 then
-                        enemy.alive = false
+                    if enemyType == "guard" then
+                        -- 使用 Guard 模块的受伤接口
+                        local Guard = require("scripts.Guard")
+                        Guard.TakeDamage(enemy, f.attackDamage)
+                    else
+                        enemy.hp = enemy.hp - f.attackDamage
+                        if enemy.hp <= 0 then
+                            enemy.alive = false
+                        end
                     end
                 end
             end
@@ -329,7 +360,7 @@ function Follower._UpdateOne(f, dt, heroState, enemies)
             -- 走向敌人
             f.aiState = "attack"
             UpdateFacing(f, enemy.x, enemy.y)
-            f.animKey = GetAnimKey("walk", f.facing)
+            f.animKey = GetAnimKey("sword", f.facing)
             MoveToward(f, enemy.x, enemy.y, f.moveSpeed * 1.1, dt)
             return
         end
@@ -346,7 +377,7 @@ function Follower._UpdateOne(f, dt, heroState, enemies)
     if distToHero > f.followDist then
         f.aiState = "follow"
         UpdateFacing(f, heroState.x, heroState.y)
-        f.animKey = GetAnimKey("walk", f.facing)
+        f.animKey = GetAnimKey("sword", f.facing)
         -- 超出最大跟随距离时瞬移（防止掉队太远）
         if distToHero > f.followMaxDist then
             local dx = heroState.x - f.x
@@ -363,7 +394,7 @@ function Follower._UpdateOne(f, dt, heroState, enemies)
         MoveToward(f, followX, followY, speed, dt)
     else
         f.aiState = "idle"
-        -- 待机时用 walk 第一帧
+        -- 待机时用 walk 动画
         f.animKey = GetAnimKey("walk", f.facing)
         f.animFrame = 0
     end
@@ -471,6 +502,25 @@ function Follower.Draw(nvg, f)
 
     nvgResetScissor(nvg)
     nvgRestore(nvg)
+
+    -- 血条（只在受伤时显示）
+    if f.hp and f.maxHP and f.hp < f.maxHP then
+        local barW = 36
+        local barH = 4
+        local barX = f.x - barW / 2
+        local barY = f.y - DRAW_SIZE / 2 - 8
+
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, barX, barY, barW, barH, 2)
+        nvgFillColor(nvg, nvgRGBA(40, 40, 40, 180))
+        nvgFill(nvg)
+
+        local hpRatio = f.hp / f.maxHP
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, barX, barY, barW * hpRatio, barH, 2)
+        nvgFillColor(nvg, nvgRGBA(80, 200, 80, 220))
+        nvgFill(nvg)
+    end
 end
 
 --- 绘制树桩
